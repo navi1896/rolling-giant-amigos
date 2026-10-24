@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using BepInEx.Configuration;
 using Unity.Collections;
@@ -190,7 +190,7 @@ public class CustomConfig : SyncedInstance<CustomConfig> {
         SpawnGuaranteedAtFivePmEntry = _config.Bind(Name1,
             nameof(SpawnGuaranteedAtFivePm),
             true,
-            "Guarantees one exterior Rolling Giant when the in-game clock reaches 5:00 PM on each active moon round. When enabled, normal random Rolling Giant spawn entries are suppressed.");
+            "Guarantees one interior Rolling Giant near the main entrance when the in-game clock reaches 5:00 PM on each active round. Configured random spawn chances remain enabled; the scheduled Giant can follow a nearby player through a paired exit.");
         CanSpawnInsideEntry = _config.Bind(Name1,
             nameof(CanSpawnInside),
             true,
@@ -441,3 +441,4 @@ public class CustomConfig : SyncedInstance<CustomConfig> {
         }
     }
 }
+
