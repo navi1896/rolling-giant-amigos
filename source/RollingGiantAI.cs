@@ -1,5 +1,6 @@
-﻿using GameNetcodeStuff;
+using GameNetcodeStuff;
 using RollingGiant.Settings;
+using System.Diagnostics.CodeAnalysis;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
@@ -33,6 +34,10 @@ public class RollingGiantAI : EnemyAI {
    private bool _isAgro;
    private float _lastSpeed;
    private bool _tooBig;
+   private PlayerControllerB? _lastChaseTarget;
+   private bool _factoryExitRequestPending;
+   private bool _hasExitedFactory;
+   private float _retryFactoryExitRequestAfter;
 
    private static void LogInfo(object message) {
 #if DEBUG
@@ -312,8 +317,21 @@ public class RollingGiantAI : EnemyAI {
 
             var lastPlayer = targetPlayer;
             if (IsOwner) {
+               if (lastPlayer != null && lastPlayer.isInsideFactory) {
+                  _lastChaseTarget = lastPlayer;
+               }
+
+               // An interior Giant cannot pathfind across the disconnected indoor
+               // and outdoor navmeshes. If its chased player exits nearby, move this
+               // same networked Giant to the paired outdoor entrance and keep chasing.
+               var playerLeaving = lastPlayer != null ? lastPlayer : _lastChaseTarget;
+               if (!isOutside && TryRequestFactoryExit(playerLeaving)) {
+                  break;
+               }
+
                // nobody is in range so go back to searching
                if (!isOutside && !TargetClosestPlayer()) {
+                  _lastChaseTarget = null;
                   SwitchToBehaviourState(0);
                   EndChasingPlayer_ServerRpc();
                   LogInfo($"[Update::{NetworkHandler.AiType}] not in range; SwitchToBehaviourState(0)");
@@ -510,6 +528,162 @@ public class RollingGiantAI : EnemyAI {
 
    private static float SmoothLerp(float a, float b, float t) {
       return a + (t * t) * (b - a);
+   }
+
+   private bool TryRequestFactoryExit(PlayerControllerB? player) {
+      if (isOutside || _hasExitedFactory || player == null || player.isInsideFactory || player.isPlayerDead || !player.IsSpawned) {
+         return false;
+      }
+
+      if (_factoryExitRequestPending && Time.time < _retryFactoryExitRequestAfter) {
+         return true;
+      }
+
+      var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
+      foreach (var insideEntrance in entrances) {
+         if (insideEntrance == null || !insideEntrance.isEntranceToBuilding) continue;
+
+         var outsideEntrance = insideEntrance.exitScript;
+         if (outsideEntrance == null || outsideEntrance.isEntranceToBuilding) {
+            outsideEntrance = null;
+            foreach (var candidate in entrances) {
+               if (candidate != null && !candidate.isEntranceToBuilding && candidate.entranceId == insideEntrance.entranceId) {
+                  outsideEntrance = candidate;
+                  break;
+               }
+            }
+         }
+         if (outsideEntrance == null) continue;
+
+         var insideDoorPosition = insideEntrance.entrancePoint != null
+            ? insideEntrance.entrancePoint.position
+            : insideEntrance.transform.position;
+         var outsideDoorPosition = outsideEntrance.entrancePoint != null
+            ? outsideEntrance.entrancePoint.position
+            : outsideEntrance.transform.position;
+         if (Vector3.Distance(transform.position, insideDoorPosition) > 16f) continue;
+         if (Vector3.Distance(player.transform.position, outsideDoorPosition) > 35f &&
+             Vector3.Distance(player.transform.position, outsideEntrance.transform.position) > 35f) continue;
+
+         _factoryExitRequestPending = true;
+         _retryFactoryExitRequestAfter = Time.time + 2f;
+         RequestFactoryExitServerRpc(insideEntrance.entranceId, (int)player.playerClientId);
+         return true;
+      }
+
+      return false;
+   }
+
+   [ServerRpc(RequireOwnership = false)]
+   private void RequestFactoryExitServerRpc(int entranceId, int targetPlayerClientId) {
+      if (!IsServer || isOutside || _hasExitedFactory) return;
+      if (!TryGetEntrancePair(entranceId, out var insideEntrance, out var outsideEntrance)) return;
+
+      var targetPlayer = FindPlayerByClientId(targetPlayerClientId);
+      if (targetPlayer == null || targetPlayer.isPlayerDead || !targetPlayer.IsSpawned || targetPlayer.isInsideFactory) return;
+
+      var insideDoorPosition = insideEntrance.entrancePoint != null
+         ? insideEntrance.entrancePoint.position
+         : insideEntrance.transform.position;
+      var outsideDoorPosition = outsideEntrance.entrancePoint != null
+         ? outsideEntrance.entrancePoint.position
+         : outsideEntrance.transform.position;
+      if (Vector3.Distance(transform.position, insideDoorPosition) > 20f) return;
+      if (Vector3.Distance(targetPlayer.transform.position, outsideDoorPosition) > 40f &&
+          Vector3.Distance(targetPlayer.transform.position, outsideEntrance.transform.position) > 40f) return;
+
+      var arrivalPosition = outsideEntrance.entrancePoint != null
+         ? outsideEntrance.entrancePoint.position
+         : outsideEntrance.transform.position;
+      var outsideNodes = GameObject.FindGameObjectsWithTag("OutsideAINode");
+      GameObject? nearestOutsideNode = null;
+      var nearestOutsideDistance = float.MaxValue;
+      foreach (var node in outsideNodes) {
+         if (node == null) continue;
+         var distance = (node.transform.position - arrivalPosition).sqrMagnitude;
+         if (distance >= nearestOutsideDistance) continue;
+         nearestOutsideDistance = distance;
+         nearestOutsideNode = node;
+      }
+
+      var samplePosition = nearestOutsideNode != null && nearestOutsideDistance < 30f * 30f
+         ? nearestOutsideNode.transform.position
+         : arrivalPosition;
+      if (!NavMesh.SamplePosition(samplePosition, out var navHit, 6f, NavMesh.AllAreas)) {
+         Plugin.Log.LogWarning("Rolling Giant reached an exit, but no outdoor NavMesh point was found beside the paired entrance.");
+         return;
+      }
+
+      _hasExitedFactory = true;
+      var networkObject = GetComponent<NetworkObject>();
+      if (networkObject != null && networkObject.IsSpawned && networkObject.OwnerClientId != NetworkManager.ServerClientId) {
+         networkObject.ChangeOwnership(NetworkManager.ServerClientId);
+      }
+
+      FollowPlayerOutsideClientRpc(navHit.position, outsideEntrance.transform.eulerAngles.y, targetPlayerClientId);
+   }
+
+   [ClientRpc]
+   private void FollowPlayerOutsideClientRpc(Vector3 position, float yaw, int targetPlayerClientId) {
+      isOutside = true;
+      _hasExitedFactory = true;
+      _factoryExitRequestPending = false;
+      allAINodes = GameObject.FindGameObjectsWithTag("OutsideAINode");
+
+      var rotation = Quaternion.Euler(0f, yaw, 0f);
+      transform.SetPositionAndRotation(position, rotation);
+      if (agent == null) agent = GetComponentInChildren<NavMeshAgent>();
+      if (agent != null) {
+         if (agent.isOnNavMesh) agent.ResetPath();
+         agent.Warp(position);
+         if (agent.isOnNavMesh) agent.ResetPath();
+      }
+
+      targetPlayer = FindPlayerByClientId(targetPlayerClientId);
+      _lastChaseTarget = targetPlayer;
+      if (targetPlayer != null) {
+         movingTowardsTargetPlayer = true;
+         SwitchToBehaviourStateOnLocalClient(1);
+         SetMovingTowardsTargetPlayer(targetPlayer);
+      }
+
+      Plugin.Log.LogInfo("Rolling Giant followed its target outside through the paired facility exit.");
+   }
+
+   private static bool TryGetEntrancePair(
+      int entranceId,
+      [NotNullWhen(true)] out EntranceTeleport? insideEntrance,
+      [NotNullWhen(true)] out EntranceTeleport? outsideEntrance) {
+      insideEntrance = null;
+      outsideEntrance = null;
+      var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
+      foreach (var candidate in entrances) {
+         if (candidate == null || !candidate.isEntranceToBuilding || candidate.entranceId != entranceId) continue;
+         insideEntrance = candidate;
+         outsideEntrance = candidate.exitScript;
+         if (outsideEntrance != null && !outsideEntrance.isEntranceToBuilding) return true;
+
+         outsideEntrance = null;
+         foreach (var pairedCandidate in entrances) {
+            if (pairedCandidate != null && !pairedCandidate.isEntranceToBuilding && pairedCandidate.entranceId == entranceId) {
+               outsideEntrance = pairedCandidate;
+               return true;
+            }
+         }
+      }
+
+      insideEntrance = null;
+      outsideEntrance = null;
+      return false;
+   }
+
+   private static PlayerControllerB? FindPlayerByClientId(int playerClientId) {
+      var players = StartOfRound.Instance != null ? StartOfRound.Instance.allPlayerScripts : null;
+      if (players == null) return null;
+      foreach (var player in players) {
+         if (player != null && (int)player.playerClientId == playerClientId) return player;
+      }
+      return null;
    }
 
    public override void OnCollideWithPlayer(Collider other) {
@@ -878,3 +1052,4 @@ public class RollingGiantAI : EnemyAI {
    }
 
 }
+
