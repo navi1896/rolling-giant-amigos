@@ -54,7 +54,7 @@ These do not update when reloading the config in-game!
 - `SpawnInAnyOutsideChance` - The chance for the Rolling Giant to spawn outside in any level
 - `CanSpawnInside` - If the Rolling Giant should spawn inside the dungeon
 - `CanSpawnOutside` - If the Rolling Giant should spawn outside
-- `SpawnGuaranteedAtFivePm` - If enabled, disables random spawn-pool entries and spawns one networked exterior Rolling Giant when the in-game clock reaches 5:00 PM on each active moon round. The host must have the mod enabled; the Company level is excluded.
+- `SpawnGuaranteedAtFivePm` - If enabled, keeps configured random spawns and adds one networked interior Rolling Giant near the main entrance when the displayed in-game clock reaches 5:00 PM on each round. When it is chasing a player who leaves through a nearby paired exit, the same Giant moves outside and continues the chase. The host must have the mod enabled and the level must provide interior AI nodes.
 - `DisableOutsideAtNight` - If the Rolling Giant will turn off if it is outside at night.
 - `MaxPerLevel` - The maximum amount of Rolling Giant's that can spawn in a level
 - `SpawnPosterIn` - Where the Rolling Giant poster scrap can spawn, separated by their chances of spawning
@@ -323,3 +323,4 @@ xcopy /y /d &quot;$(TargetDir)$(TargetName).dll&quot; &quot;$(GameDir)\BepInEx\p
 <br/>
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/B0B6R2Z9U)
+
