@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using HarmonyLib;
 using RollingGiant.Settings;
 
@@ -36,8 +36,7 @@ public static class EnemyPatches {
 
     private static void HandleSpawnInSelection(SelectableLevel[] levels) {
         if (CustomConfig.SpawnGuaranteedAtFivePm) {
-            Plugin.Log.LogInfo("Guaranteed 5:00 PM exterior spawn enabled; skipping random spawn-pool entries.");
-            return;
+            Plugin.Log.LogInfo("Guaranteed indoor 5:00 PM spawn enabled alongside configured random spawn-pool entries.");
         }
 
         Plugin.Log.LogMessage($"[HandleSpawnInSelection] Adding enemies to {CustomConfig.SpawnIn}");
@@ -74,8 +73,7 @@ public static class EnemyPatches {
 
     private static void HandleSpawnInAny(SelectableLevel[] levels) {
         if (CustomConfig.SpawnGuaranteedAtFivePm) {
-            Plugin.Log.LogInfo("Guaranteed 5:00 PM exterior spawn enabled; skipping random spawn-pool entries.");
-            return;
+            Plugin.Log.LogInfo("Guaranteed indoor 5:00 PM spawn enabled alongside configured random spawn-pool entries.");
         }
 
         Plugin.Log.LogMessage($"[HandleSpawnInAny] Adding enemies to all levels");
@@ -190,3 +188,4 @@ public static class EnemyPatches {
         }
     }
 }
+
