@@ -49,6 +49,7 @@ public class Plugin : BaseUnityPlugin {
     public static Material BlackAndWhiteMaterial;
 
     internal static ManualLogSource Log;
+    internal static Harmony HarmonyInstance;
 
     private void Awake() {
         InstanceObject = base.gameObject;
@@ -60,12 +61,23 @@ public class Plugin : BaseUnityPlugin {
 
         LoadAssets();
         LoadNetWeaver();
-        var harmony = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
+        HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
         if (Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
-            try { InitializeControlCompanyCompat(harmony); } catch (Exception ex) { Logger.LogError(ex); }
+            try { PatchControlCompanyEarlyGuard(HarmonyInstance); } catch (Exception ex) { Logger.LogError(ex); }
         }
         
         Logger.LogInfo($"Plugin {PluginGuid} is loaded!");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void PatchControlCompanyEarlyGuard(Harmony harmony) {
+        Compatibility.ControlCompanyEarlyGuard.Patch(harmony);
+    }
+
+    public static void TryInitializeControlCompanyCompat() {
+        if (HarmonyInstance != null && Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
+            try { InitializeControlCompanyCompat(HarmonyInstance); } catch (Exception ex) { Log.LogError(ex); }
+        }
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

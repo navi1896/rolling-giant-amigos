@@ -1,7 +1,7 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Runtime.CompilerServices;
 using ControlCompany.Core;
 using ControlCompany.Core.Config;
 using ControlCompany.Core.Enemy;
@@ -15,12 +15,45 @@ using UnityEngine.InputSystem.Controls;
 
 namespace RollingGiant.Compatibility;
 
+internal static class ControlCompanyEarlyGuard
+{
+    private static bool _patched;
+
+    public static void Patch(Harmony harmony)
+    {
+        if (_patched || harmony == null) return;
+        _patched = true;
+
+        var updateMethod = AccessTools.Method(typeof(ConfigManager), "Update");
+        if (updateMethod != null)
+        {
+            harmony.Patch(
+                updateMethod,
+                prefix: new HarmonyMethod(typeof(ControlCompanyEarlyGuard), nameof(ConfigManagerUpdatePrefix)));
+        }
+    }
+
+    private static bool ConfigManagerUpdatePrefix()
+    {
+        return Keyboard.current != null && Mouse.current != null;
+    }
+}
+
 internal static class ControlCompanyCompat
 {
+    private static bool _initialized;
+
     public static void Initialize(Harmony harmony)
     {
+        if (_initialized || harmony == null) return;
+        if (Keyboard.current == null || Mouse.current == null) return;
+        _initialized = true;
+
         // 1. Register Rolling Giant attributes, allowlist, and custom controller in official ControlCompany
-        EnemyConfiguration.ALLOWLISTED_ENEMIES.Add(typeof(RollingGiantAI));
+        if (!EnemyConfiguration.ALLOWLISTED_ENEMIES.Contains(typeof(RollingGiantAI)))
+        {
+            EnemyConfiguration.ALLOWLISTED_ENEMIES.Add(typeof(RollingGiantAI));
+        }
         EnemyConfiguration.ENEMY_ATTRIBUTES[typeof(RollingGiantAI)] = new EnemyAttributes
         {
             WalkSpeed = 6f,
@@ -133,9 +166,10 @@ internal static class ControlCompanyCompat
         return false;
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void EnsureKeybindsLoadedPostfix()
     {
-        if (Keyboard.current == null) return;
+        if (Keyboard.current == null || Mouse.current == null) return;
 
         if (InputKeys.GHOST_SPAWN_ENEMY_KEYS == null || InputKeys.GHOST_SPAWN_ENEMY_KEYS.Count == 0)
         {
@@ -195,6 +229,7 @@ internal static class ControlCompanyCompat
         list.Insert(0, entry);
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void InputUpdatePostfix(ControlCenter __instance)
     {
         if (__instance == null || __instance.CurrentMode != ControlCenter.Mode.HOST || !__instance.isExtendedModeEnabled)

@@ -35,7 +35,9 @@ internal class RollingGiantEnemyController : EnemyAIController
         if (!isAIControlled)
         {
             rollingGiant.PlayerControlledSpeed = stopped ? 0f : characterController.velocity.magnitude;
-            if (InputKeys.CONTROLLER_USE_KEY != null && ((ButtonControl)InputKeys.CONTROLLER_USE_KEY).wasPressedThisFrame)
+            bool pressedInteract = (InputKeys.CONTROLLER_USE_KEY != null && ((ButtonControl)InputKeys.CONTROLLER_USE_KEY).wasPressedThisFrame)
+                || playerActions.Movement.Interact.WasPressedThisFrame();
+            if (pressedInteract)
             {
                 if (rollingGiant.TryTeleportOutsideFromController(out var destination))
                 {

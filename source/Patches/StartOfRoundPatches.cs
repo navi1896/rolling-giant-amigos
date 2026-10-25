@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using HarmonyLib;
 using RollingGiant.Settings;
 using Unity.Netcode;
@@ -9,6 +9,13 @@ namespace RollingGiant.Patches;
 
 [HarmonyPatch]
 public class StartOfRoundPatches {
+    [HarmonyPatch(typeof(StartOfRound), "Awake")]
+    [HarmonyPrefix]
+    [HarmonyPriority(Priority.First)]
+    private static void InitControlCompanyCompatPrefix() {
+        Plugin.TryInitializeControlCompanyCompat();
+    }
+
     [HarmonyPatch(typeof(StartOfRound), "Awake")]
     [HarmonyPostfix]
     private static void AddCustomRagdoll(StartOfRound __instance) {
