@@ -37,14 +37,15 @@ internal class RollingGiantEnemyController : EnemyAIController
 		if (!isAIControlled)
 		{
 			rollingGiant.PlayerControlledSpeed = stopped ? 0f : characterController.velocity.magnitude;
-			if (((ButtonControl)InputKeys.CONTROLLER_USE_KEY).wasPressedThisFrame && !rollingGiant.isOutside)
+			if (((ButtonControl)InputKeys.CONTROLLER_USE_KEY).wasPressedThisFrame)
 			{
 				if (rollingGiant.TryTeleportOutsideFromController(out var destination))
 				{
 					((Collider)characterController).enabled = false;
 					((Component)this).transform.position = destination;
 					((Collider)characterController).enabled = true;
-					ControlCenter.Instance.IsGhostIndoors = false;
+					ControlCenter.Instance.IsGhostIndoors = !rollingGiant.isOutside;
+					EnableLight(!rollingGiant.isOutside);
 				}
 			}
 		}

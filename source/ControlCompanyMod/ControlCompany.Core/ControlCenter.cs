@@ -266,7 +266,11 @@ internal class ControlCenter : MonoBehaviour
 			else if (((ButtonControl)InputKeys.HOST_GIVE_CREDITS_KEY).wasPressedThisFrame)
 			{
 				Terminal obj = Object.FindObjectOfType<Terminal>();
-				obj.groupCredits += 100;
+				if (obj != null)
+				{
+					obj.groupCredits += 100;
+					obj.SyncGroupCreditsServerRpc(obj.groupCredits, obj.numberOfItemsInDropship);
+				}
 			}
 			break;
 		case Mode.GHOST:
