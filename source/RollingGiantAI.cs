@@ -39,6 +39,43 @@ public class RollingGiantAI : EnemyAI {
    private bool _hasExitedFactory;
    private float _retryFactoryExitRequestAfter;
 
+   public bool IsPlayerControlled { get; set; }
+   public float PlayerControlledSpeed { get; set; }
+   public bool ForceMoveWhileLookedAt { get; set; }
+
+   public bool IsStoppedByPlayerLook => _wasStopped && !ForceMoveWhileLookedAt;
+
+   public void PlayLocalStopSound() {
+      if (_stopNoises != null && _stopNoises.Length > 0 && creatureVoice != null) {
+         RoundManager.PlayRandomClip(creatureVoice, _stopNoises, false);
+      }
+   }
+
+   public bool TryTeleportOutsideFromController(out Vector3 destination) {
+      destination = transform.position;
+      if (!IsServer || isOutside) return false;
+
+      var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
+      foreach (var insideEntrance in entrances) {
+         if (insideEntrance == null || !insideEntrance.isEntranceToBuilding) continue;
+         var insidePos = insideEntrance.entrancePoint != null ? insideEntrance.entrancePoint.position : insideEntrance.transform.position;
+         if (Vector3.Distance(transform.position, insidePos) > 5f) continue;
+
+         if (!TryGetEntrancePair(insideEntrance.entranceId, out _, out var outsideEntrance)) continue;
+         var arrivalPosition = outsideEntrance.entrancePoint != null ? outsideEntrance.entrancePoint.position : outsideEntrance.transform.position;
+         if (NavMesh.SamplePosition(arrivalPosition, out var navHit, 6f, NavMesh.AllAreas)) {
+            arrivalPosition = navHit.position;
+         }
+
+         _hasExitedFactory = true;
+         FollowPlayerOutsideClientRpc(arrivalPosition, outsideEntrance.transform.eulerAngles.y, 0);
+         destination = arrivalPosition;
+         return true;
+      }
+
+      return false;
+   }
+
    private static void LogInfo(object message) {
 #if DEBUG
       Plugin.Log.LogInfo(message);
@@ -134,6 +171,14 @@ public class RollingGiantAI : EnemyAI {
       
       // LogInfo($"{agent.speed}, {_velocity.Value}");
    
+      if (IsPlayerControlled) {
+         _wasStopped = AmIBeingLookedAt(out _) && !ForceMoveWhileLookedAt;
+         if (!_wasStopped) {
+            _wasFeared = false;
+         }
+         return;
+      }
+
       switch (currentBehaviourStateIndex) {
          // searching
          case 0:
@@ -209,18 +254,20 @@ public class RollingGiantAI : EnemyAI {
       }
    
       if (IsHost || IsServer) {
-         _velocity.Value = agent.velocity.magnitude;
+         _velocity.Value = IsPlayerControlled ? PlayerControlledSpeed : agent.velocity.magnitude;
       }
    
       base.Update();
    
       if (isEnemyDead) return;
    
-      _lastSpeed = agent.velocity.magnitude;
-      CalculateAgentSpeed();
+      _lastSpeed = _velocity.Value;
+      if (!IsPlayerControlled) {
+         CalculateAgentSpeed();
+      }
       
       _timeSinceHittingPlayer += Time.deltaTime;
-      _mainCollider.isTrigger = _velocity.Value > 0.01f;
+      _mainCollider.isTrigger = _velocity.Value > 0.01f || IsPlayerControlled;
       
       var speed = _velocity.Value;
       // LogInfo($"[Update::{NetworkHandler.AiType}] _wasStopped: {_wasStopped}, speed: {speed}/{_sharedAiSettings.moveSpeed}, moveTowardsDestination: {moveTowardsDestination}: movingTowardsTargetPlayer: {movingTowardsTargetPlayer}, onNavmesh: {agent.isOnNavMesh}, isActiveAndEnabled: {agent.isActiveAndEnabled}");
@@ -254,6 +301,14 @@ public class RollingGiantAI : EnemyAI {
          }
       }
    
+      if (IsPlayerControlled) {
+         _wasStopped = AmIBeingLookedAt(out _) && !ForceMoveWhileLookedAt;
+         if (!_wasStopped) {
+            _wasFeared = false;
+         }
+         return;
+      }
+
       switch (currentBehaviourStateIndex) {
          // searching
          case 0:
@@ -1052,4 +1107,3 @@ public class RollingGiantAI : EnemyAI {
    }
 
 }
-

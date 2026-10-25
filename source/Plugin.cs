@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -24,10 +24,11 @@ namespace RollingGiant;
 public class Plugin : BaseUnityPlugin {
     public const string PluginGuid = "nomnomab.rollinggiant";
     public const string PluginName = "Rolling Giant";
-    public const string PluginVersion = "2.6.3.1";
+    public const string PluginVersion = "2.6.3.2";
     
     private const int SaveFileVersion = 11;
 
+    public static GameObject? InstanceObject { get; private set; }
     public static string PluginDirectory;
     public static CustomConfig CustomConfig { get; private set; }
     public static ConfigFile Config { get; private set; }
@@ -47,6 +48,7 @@ public class Plugin : BaseUnityPlugin {
     internal static ManualLogSource Log;
 
     private void Awake() {
+        InstanceObject = base.gameObject;
         Config = base.Config;
         Log = Logger;
         PluginDirectory = Info.Location;
@@ -55,6 +57,7 @@ public class Plugin : BaseUnityPlugin {
 
         LoadAssets();
         LoadNetWeaver();
+        ControlCompany.ControlCompanyPlugin.EnsureInitialized(base.Config);
         
         Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
         
