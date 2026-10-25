@@ -49,7 +49,21 @@ public static class InputKeys
 
 	public static KeyControl GHOST_SPAWN_ENEMY_12 = Keyboard.current.f12Key;
 
-	public static List<KeyControl> GHOST_SPAWN_ENEMY_KEYS = new List<KeyControl>();
+	public static List<KeyControl> GHOST_SPAWN_ENEMY_KEYS = new List<KeyControl>
+	{
+		GHOST_SPAWN_ENEMY_1,
+		GHOST_SPAWN_ENEMY_2,
+		GHOST_SPAWN_ENEMY_3,
+		GHOST_SPAWN_ENEMY_4,
+		GHOST_SPAWN_ENEMY_5,
+		GHOST_SPAWN_ENEMY_6,
+		GHOST_SPAWN_ENEMY_7,
+		GHOST_SPAWN_ENEMY_8,
+		GHOST_SPAWN_ENEMY_9,
+		GHOST_SPAWN_ENEMY_10,
+		GHOST_SPAWN_ENEMY_11,
+		GHOST_SPAWN_ENEMY_12
+	};
 
 	public static KeyControl ENEMY_TOGGLE_AI_KEY = Keyboard.current.f1Key;
 

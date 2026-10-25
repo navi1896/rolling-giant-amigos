@@ -22,7 +22,7 @@ public static class ExtensionMethods
 
 	public static object Call(this object o, string methodName, params object[] args)
 	{
-		MethodInfo method = o.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+		MethodInfo method = o.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 		if (method != null)
 		{
 			return method.Invoke(o, args);

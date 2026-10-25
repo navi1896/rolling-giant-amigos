@@ -55,6 +55,34 @@ internal class ControllableEnemy
 		}
 	}
 
+	public static ControllableEnemy FromEnemyType(EnemyType enemyType)
+	{
+		try
+		{
+			GameObject val = enemyType?.enemyPrefab ?? null;
+			if ((Object)(object)val == (Object)null) return null;
+			EnemyAI componentInChildren = val.GetComponentInChildren<EnemyAI>();
+			string enemyName = (((Object)(object)componentInChildren == (Object)null) ? enemyType.enemyName : componentInChildren.GetEnemyName());
+			return new ControllableEnemy
+			{
+				EnemyName = enemyName,
+				EnemyPrefab = val,
+				OverrideEnemyPrefab = false,
+				OverrideEnemySpawnLocation = false,
+				Allowlisted = ((Object)(object)componentInChildren == (Object)null || componentInChildren.IsEnemyAllowlisted()),
+				CreateAndAttachEnemyControllerFunc = delegate(GameObject enemyGameObject, GameObject enemyController)
+				{
+					EnemyAI componentInChildren2 = enemyGameObject.GetComponentInChildren<EnemyAI>();
+					return componentInChildren2.GetAndAttachEnemyController(enemyController);
+				}
+			};
+		}
+		catch (Exception)
+		{
+			return null;
+		}
+	}
+
 	public static ControllableEnemy FromEnemyAI(EnemyAI enemyAI)
 	{
 		GameObject enemyPrefab = enemyAI.enemyType.enemyPrefab;

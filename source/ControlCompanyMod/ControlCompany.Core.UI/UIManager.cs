@@ -166,7 +166,7 @@ internal class UIManager : MonoBehaviour
 			InputKey = exitKey,
 			ActionText = "Exit"
 		});
-		RenderPlayerStatus(hostPlayer, listenFromHostKey);
+		try { RenderPlayerStatus(hostPlayer, listenFromHostKey); } catch { }
 		RenderGhostControlList(list);
 	}
 
@@ -357,7 +357,15 @@ internal class UIManager : MonoBehaviour
 
 	private bool HostIsNearOtherPlayers(PlayerControllerB hostPlayer)
 	{
-		return (bool)hostPlayer.Call("NearOtherPlayers", hostPlayer, 17f);
+		if ((Object)(object)hostPlayer == (Object)null || ControlCenter.Instance == null) return false;
+		foreach (PlayerControllerB p in ControlCenter.Instance.GetAlivePlayers())
+		{
+			if ((Object)(object)p != (Object)null && (Object)(object)p != (Object)(object)hostPlayer && Vector3.Distance(((Component)hostPlayer).transform.position, ((Component)p).transform.position) < 17f)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 }
 

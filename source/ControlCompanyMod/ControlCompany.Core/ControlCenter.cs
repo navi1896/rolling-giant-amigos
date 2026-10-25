@@ -625,10 +625,9 @@ internal class ControlCenter : MonoBehaviour
 		}
 		if (RollingGiant.Plugin.EnemyTypeInside != null && RollingGiant.Plugin.EnemyTypeInside.enemyPrefab != null)
 		{
-			EnemyAI rgInsideAI = RollingGiant.Plugin.EnemyTypeInside.enemyPrefab.GetComponentInChildren<EnemyAI>();
-			if (rgInsideAI != null)
+			if (true)
 			{
-				ControllableEnemy rgInside = ControllableEnemy.FromEnemyAI(rgInsideAI);
+				ControllableEnemy rgInside = ControllableEnemy.FromEnemyType(RollingGiant.Plugin.EnemyTypeInside);
 				if (rgInside != null)
 				{
 					indoorEnemiesOfLevel.Insert(0, rgInside);
@@ -638,10 +637,9 @@ internal class ControlCenter : MonoBehaviour
 		}
 		if (RollingGiant.Plugin.EnemyTypeOutside != null && RollingGiant.Plugin.EnemyTypeOutside.enemyPrefab != null)
 		{
-			EnemyAI rgOutsideAI = RollingGiant.Plugin.EnemyTypeOutside.enemyPrefab.GetComponentInChildren<EnemyAI>();
-			if (rgOutsideAI != null)
+			if (true)
 			{
-				ControllableEnemy rgOutside = ControllableEnemy.FromEnemyAI(rgOutsideAI);
+				ControllableEnemy rgOutside = ControllableEnemy.FromEnemyType(RollingGiant.Plugin.EnemyTypeOutside);
 				if (rgOutside != null)
 				{
 					outdoorEnemiesOfLevel.Insert(0, rgOutside);

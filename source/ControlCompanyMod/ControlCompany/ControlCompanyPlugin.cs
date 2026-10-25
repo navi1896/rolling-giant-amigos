@@ -55,16 +55,18 @@ public class ControlCompanyPlugin : BaseUnityPlugin
 		{
 			Instance.logger = log;
 			string ccCfgPath = Path.Combine(Paths.ConfigPath, "ControlCompany.ControlCompany.cfg");
-			Instance.CustomConfigFile = File.Exists(ccCfgPath)
-				? new ConfigFile(ccCfgPath, true)
-				: (fallbackConfig ?? RollingGiant.Plugin.Config);
+			Instance.CustomConfigFile = new ConfigFile(ccCfgPath, true);
 		}
 		if (ConfigManager.Instance == null)
 		{
 			GameObject val = new GameObject("crew17_control_company_config_manager");
-			val.AddComponent<ConfigManager>();
+			ConfigManager.Instance = val.AddComponent<ConfigManager>();
 			((Object)val).hideFlags = (HideFlags)61;
 			Object.DontDestroyOnLoad((Object)(object)val);
+		}
+		if (ConfigManager.Instance != null)
+		{
+			ConfigManager.Instance.LoadPlayerConfig(reload: false);
 		}
 		log.LogInfo("Loaded ControlCompany (Crew17 Edition) with native Rolling Giant support.");
 		isInitialized = true;
