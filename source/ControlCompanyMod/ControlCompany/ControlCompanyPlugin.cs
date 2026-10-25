@@ -4,13 +4,12 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using ControlCompany.Core.Config;
-using ControlCompany.Patches;
-using HarmonyLib;
 using UnityEngine;
 
 namespace ControlCompany;
 
 [BepInPlugin(modGUID, modName, modVersion)]
+[BepInDependency(RollingGiant.Plugin.PluginGuid)]
 public class ControlCompanyPlugin : BaseUnityPlugin
 {
 	public const string modGUID = "Crew17.ControlCompany";
@@ -33,6 +32,7 @@ public class ControlCompanyPlugin : BaseUnityPlugin
 		{
 			Instance = this;
 		}
+		logger = base.Logger;
 		EnsureInitialized(base.Config);
 	}
 
@@ -50,25 +50,24 @@ public class ControlCompanyPlugin : BaseUnityPlugin
 				Instance = RollingGiant.Plugin.InstanceObject.AddComponent<ControlCompanyPlugin>();
 			}
 		}
-		var log = BepInEx.Logging.Logger.CreateLogSource(modGUID);
 		if (Instance != null)
 		{
-			Instance.logger = log;
+			if (Instance.logger == null)
+			{
+				Instance.logger = Instance.Logger ?? BepInEx.Logging.Logger.CreateLogSource(modGUID);
+			}
 			string ccCfgPath = Path.Combine(Paths.ConfigPath, "ControlCompany.ControlCompany.cfg");
-			Instance.CustomConfigFile = new ConfigFile(ccCfgPath, true);
+			Instance.CustomConfigFile = File.Exists(ccCfgPath)
+				? new ConfigFile(ccCfgPath, true)
+				: (fallbackConfig ?? ((BaseUnityPlugin)Instance).Config ?? RollingGiant.Plugin.Config);
 		}
 		if (ConfigManager.Instance == null)
 		{
 			GameObject val = new GameObject("crew17_control_company_config_manager");
 			ConfigManager.Instance = val.AddComponent<ConfigManager>();
-			((Object)val).hideFlags = (HideFlags)61;
 			Object.DontDestroyOnLoad((Object)(object)val);
 		}
-		if (ConfigManager.Instance != null)
-		{
-			ConfigManager.Instance.LoadPlayerConfig(reload: false);
-		}
-		log.LogInfo("Loaded ControlCompany (Crew17 Edition) with native Rolling Giant support.");
+		Instance?.logger?.LogInfo("Loaded ControlCompany (Crew17 Edition) with native Rolling Giant support.");
 		isInitialized = true;
 	}
 }

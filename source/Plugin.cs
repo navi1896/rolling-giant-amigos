@@ -57,9 +57,8 @@ public class Plugin : BaseUnityPlugin {
 
         LoadAssets();
         LoadNetWeaver();
-        ControlCompany.ControlCompanyPlugin.EnsureInitialized(base.Config);
-        
         Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
+        try { ControlCompany.ControlCompanyPlugin.EnsureInitialized(base.Config); } catch (Exception ex) { Logger.LogError(ex); }
         
         Logger.LogInfo($"Plugin {PluginGuid} is loaded!");
     }

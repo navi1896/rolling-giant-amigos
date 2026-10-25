@@ -58,14 +58,22 @@ public class RollingGiantAI : EnemyAI {
       var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
       foreach (var currentSideEntrance in entrances) {
          if (currentSideEntrance == null) continue;
-         var isCurrentSideDoor = isOutside ? !currentSideEntrance.isEntranceToBuilding : currentSideEntrance.isEntranceToBuilding;
-         if (!isCurrentSideDoor) continue;
-
          var doorPos = currentSideEntrance.entrancePoint != null ? currentSideEntrance.entrancePoint.position : currentSideEntrance.transform.position;
-         if (Vector3.Distance(transform.position, doorPos) > 5f) continue;
+         if (Vector3.Distance(transform.position, doorPos) > 5f && Vector3.Distance(transform.position, currentSideEntrance.transform.position) > 5f) continue;
 
-         if (!TryGetEntrancePair(currentSideEntrance.entranceId, out var insideEntrance, out var outsideEntrance)) continue;
-         var targetEntrance = isOutside ? insideEntrance : outsideEntrance;
+         EntranceTeleport? targetEntrance = currentSideEntrance.exitScript;
+         if (targetEntrance == null)
+         {
+            foreach (var candidate in entrances)
+            {
+               if (candidate != null && candidate.entranceId == currentSideEntrance.entranceId && candidate.isEntranceToBuilding != currentSideEntrance.isEntranceToBuilding)
+               {
+                  targetEntrance = candidate;
+                  break;
+               }
+            }
+         }
+         if (targetEntrance == null) continue;
          var arrivalPosition = targetEntrance.entrancePoint != null ? targetEntrance.entrancePoint.position : targetEntrance.transform.position;
          if (NavMesh.SamplePosition(arrivalPosition, out var navHit, 6f, NavMesh.AllAreas)) {
             arrivalPosition = navHit.position;

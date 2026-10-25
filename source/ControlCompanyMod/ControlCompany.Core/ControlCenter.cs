@@ -61,6 +61,8 @@ internal class ControlCenter : MonoBehaviour
 
 	private bool loadedConfig = false;
 
+	private bool roundInitialized = false;
+
 	private bool showUI = true;
 
 	private float gameStartedTime = 0f;
@@ -103,19 +105,22 @@ internal class ControlCenter : MonoBehaviour
 
 	private void OnEnable()
 	{
-		if (!loadedConfig)
+		if (!loadedConfig && ConfigManager.Instance != null)
 		{
-			loadedConfig = true;
-			ConfigManager.Instance.LoadPlayerConfig(reload: true);
+			loadedConfig = ConfigManager.Instance.LoadPlayerConfig(reload: true);
 		}
 	}
 
 	private void Update()
 	{
+		if (!InputKeys.EnsureDefaults()) return;
+		if (!loadedConfig && ConfigManager.Instance != null) { loadedConfig = ConfigManager.Instance.LoadPlayerConfig(reload: true); }
 		if (!IsGameStarted())
 		{
+			roundInitialized = false;
 			return;
 		}
+		if (!roundInitialized && IsHost()) { StartOfRoundInitialization(); }
 		if (((ButtonControl)InputKeys.TOGGLE_UI_KEY).wasPressedThisFrame)
 		{
 			showUI = !showUI;
@@ -402,6 +407,8 @@ internal class ControlCenter : MonoBehaviour
 
 	private void OnGUI()
 	{
+		if (!InputKeys.EnsureDefaults()) return;
+		if (!loadedConfig && ConfigManager.Instance != null) { loadedConfig = ConfigManager.Instance.LoadPlayerConfig(reload: true); }
 		if (!IsGameStarted() || !showUI)
 		{
 			return;
@@ -429,6 +436,7 @@ internal class ControlCenter : MonoBehaviour
 				break;
 			case Mode.GHOST:
 			{
+				if ((currentSpawnableEnemyList == null || currentSpawnableEnemyList.Count == 0) && GetSpawnableEnemies(isGhostIndoors).Count > 0) { SetNextSpawnEnemiesPage(0); }
 				bool showEnemyPaging = GetSpawnableEnemies(isGhostIndoors).Count > 12;
 				List<IEnumerable<Item>> list = GetSpawnableScraps().Chunk(10).ToList();
 				List<Item> scraps = ((list.Count > 0) ? list[currentSpawnScrapPage].ToList() : new List<Item>());
@@ -605,10 +613,13 @@ internal class ControlCenter : MonoBehaviour
 			where x != null
 			select x);
 		ControllableEnemy maskedEnemy = GetMaskedEnemy();
-		indoorEnemiesOfLevel.Add(maskedEnemy);
-		outdoorEnemiesOfLevel.Add(maskedEnemy);
-		allIndoorEnemies.Add(maskedEnemy);
-		allOutdoorEnemies.Add(maskedEnemy);
+		if (maskedEnemy != null)
+		{
+			indoorEnemiesOfLevel.Add(maskedEnemy);
+			outdoorEnemiesOfLevel.Add(maskedEnemy);
+			allIndoorEnemies.Add(maskedEnemy);
+			allOutdoorEnemies.Add(maskedEnemy);
+		}
 		ControllableEnemy companyMonsterEnemy = GetCompanyMonsterEnemy();
 		if (companyMonsterEnemy != null)
 		{
@@ -655,14 +666,16 @@ internal class ControlCenter : MonoBehaviour
 		SetCurrentTargetToHost();
 		ResetToDefault();
 		inRoundEndPhase = false;
-		ControlCompanyPlugin.Instance.logger.LogMessage((object)"Start of round initialization completed.");
+		roundInitialized = true;
+		ControlCompanyPlugin.Instance.logger?.LogMessage((object)"Start of round initialization completed.");
 	}
 
 	public void EndOfRoundCleanUp()
 	{
 		ResetToDefault();
 		inRoundEndPhase = true;
-		ControlCompanyPlugin.Instance.logger.LogMessage((object)"End of round clean up completed.");
+		roundInitialized = false;
+		ControlCompanyPlugin.Instance.logger?.LogMessage((object)"End of round clean up completed.");
 	}
 
 	private void ResetToDefault()
@@ -892,7 +905,9 @@ internal class ControlCenter : MonoBehaviour
 
 	private ControllableEnemy GetSecretEnemy()
 	{
-		Object[] array = Resources.FindObjectsOfTypeAll(typeof(EnemyAI));
+		try
+		{
+			Object[] array = Resources.FindObjectsOfTypeAll(typeof(EnemyAI));
 		Object[] array2 = array;
 		for (int i = 0; i < array2.Length; i++)
 		{
@@ -902,6 +917,8 @@ internal class ControlCenter : MonoBehaviour
 				return ControllableEnemy.FromEnemyAI(val);
 			}
 		}
+		}
+		catch { }
 		return null;
 	}
 

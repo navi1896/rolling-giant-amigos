@@ -85,7 +85,8 @@ internal class ControllableEnemy
 
 	public static ControllableEnemy FromEnemyAI(EnemyAI enemyAI)
 	{
-		GameObject enemyPrefab = enemyAI.enemyType.enemyPrefab;
+		GameObject enemyPrefab = enemyAI?.enemyType?.enemyPrefab;
+		if ((Object)(object)enemyPrefab == (Object)null) return null;
 		string enemyName = (((Object)(object)enemyAI == (Object)null) ? enemyAI.enemyType.enemyName : enemyAI.GetEnemyName());
 		return new ControllableEnemy
 		{

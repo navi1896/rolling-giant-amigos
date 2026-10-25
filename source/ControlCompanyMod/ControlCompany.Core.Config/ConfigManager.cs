@@ -15,8 +15,6 @@ internal class ConfigManager : MonoBehaviour
 {
 	public static ConfigManager Instance;
 
-	private bool isInitialized;
-
 	private bool loadedConfig = false;
 
 	private const string KEYBIND_CONFIG = "Keybinds";
@@ -55,31 +53,39 @@ internal class ConfigManager : MonoBehaviour
 
 	private void Update()
 	{
-		if (!loadedConfig && ControlCompanyPlugin.Instance != null && (ControlCompanyPlugin.Instance.CustomConfigFile ?? ((BaseUnityPlugin)ControlCompanyPlugin.Instance).Config) != null)
+		if (!loadedConfig && InputKeys.EnsureDefaults() && ControlCompanyPlugin.Instance != null)
 		{
-			loadedConfig = true;
-			ControlCompanyPlugin.Instance.logger.LogInfo((object)"Initial keybind load");
-			LoadPlayerConfig(reload: false);
+			loadedConfig = LoadPlayerConfig(reload: false);
 		}
 	}
 
-	public void LoadPlayerConfig(bool reload)
+	public bool LoadPlayerConfig(bool reload)
 	{
-		if (ControlCompanyPlugin.Instance == null) return;
-		ConfigFile config = ControlCompanyPlugin.Instance.CustomConfigFile ?? ((BaseUnityPlugin)ControlCompanyPlugin.Instance).Config;
-		if (config != null)
+		if (!InputKeys.EnsureDefaults())
 		{
-			if (reload)
-			{
-				config.Reload();
-			}
-			LoadConfig(config);
+			return false;
 		}
+		if (ControlCompanyPlugin.Instance == null)
+		{
+			return false;
+		}
+		ConfigFile config = ControlCompanyPlugin.Instance.CustomConfigFile ?? ((BaseUnityPlugin)ControlCompanyPlugin.Instance).Config;
+		if (config == null)
+		{
+			return false;
+		}
+		if (reload)
+		{
+			config.Reload();
+		}
+		LoadConfig(config);
+		loadedConfig = true;
+		return true;
 	}
 
 	private void LoadConfig(ConfigFile config)
 	{
-		ControlCompanyPlugin.Instance.logger.LogInfo((object)"Loading config");
+		ControlCompanyPlugin.Instance.logger?.LogInfo((object)"Loading config");
 		useEnemySpawningBehaviour = config.Bind<bool>("General", "use_enemy_spawning_behaviour", false, (ConfigDescription)null).Value;
 		disableWhileUsingTerminal = config.Bind<bool>("General", "disable_while_using_terminal", true, (ConfigDescription)null).Value;
 		disableModForSelf = config.Bind<bool>("General", "disable_mod_for_self", false, (ConfigDescription)null).Value;
@@ -149,28 +155,25 @@ internal class ConfigManager : MonoBehaviour
 		InputKeys.ENEMY_TOGGLE_AI_KEY = GetKeyControlFromConfig(keyEntry24, InputKeys.ENEMY_TOGGLE_AI_KEY);
 		ConfigEntry<string> keyEntry25 = config.Bind<string>("Keybinds.MonsterMode", "toggle_light", "l", (ConfigDescription)null);
 		InputKeys.ENEMY_TOGGLE_LIGHT_KEY = GetKeyControlFromConfig(keyEntry25, InputKeys.ENEMY_TOGGLE_LIGHT_KEY);
-		ControlCompanyPlugin.Instance.logger.LogInfo((object)"Done loading keybinds");
+		ControlCompanyPlugin.Instance.logger?.LogInfo((object)"Done loading keybinds");
 	}
 
 	private KeyControl GetKeyControlFromConfig(ConfigEntry<string> keyEntry, KeyControl defaultKey)
 	{
 		try
 		{
-			KeyControl val = Keyboard.current.FindKeyOnCurrentKeyboardLayout(keyEntry.Value);
+			KeyControl val = Keyboard.current?.FindKeyOnCurrentKeyboardLayout(keyEntry.Value);
 			if (val != null)
 			{
 				return val;
 			}
-			ControlCompanyPlugin.Instance.logger.LogWarning((object)$"Cannot rebind key for {((ConfigEntryBase)keyEntry).Definition.Key} to {keyEntry.Value}: Cannot find key {((ConfigEntryBase)keyEntry).Definition.Key} on keyboard layout. Using default key ${defaultKey}");
+			ControlCompanyPlugin.Instance.logger?.LogWarning((object)$"Cannot rebind key for {((ConfigEntryBase)keyEntry).Definition.Key} to {keyEntry.Value}: Cannot find key {((ConfigEntryBase)keyEntry).Definition.Key} on keyboard layout. Using default key ${defaultKey}");
 			return defaultKey;
 		}
 		catch (Exception ex)
 		{
-			ControlCompanyPlugin.Instance.logger.LogWarning((object)$"Cannot rebind key for {((ConfigEntryBase)keyEntry).Definition.Key} to {keyEntry.Value}: {ex.Message}. Using default key ${defaultKey}");
+			ControlCompanyPlugin.Instance.logger?.LogWarning((object)$"Cannot rebind key for {((ConfigEntryBase)keyEntry).Definition.Key} to {keyEntry.Value}: {ex.Message}. Using default key ${defaultKey}");
 			return defaultKey;
 		}
 	}
 }
-
-
-

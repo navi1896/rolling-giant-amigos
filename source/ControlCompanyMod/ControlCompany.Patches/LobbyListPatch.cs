@@ -3,6 +3,7 @@ using System.Linq;
 using ControlCompany.Core.Config;
 using ControlCompany.Core.Extentions;
 using HarmonyLib;
+using UnityEngine;
 
 namespace ControlCompany.Patches;
 
@@ -15,7 +16,11 @@ internal class LobbyListPatch
 	[HarmonyPrefix]
 	private static void AddServerNameChar(MenuManager __instance)
 	{
-		string text = __instance.lobbyNameInputField.text;
+		if ((Object)(object)__instance == (Object)null || (Object)(object)__instance.lobbyNameInputField == (Object)null || (Object)(object)ConfigManager.Instance == (Object)null)
+		{
+			return;
+		}
+		string text = __instance.lobbyNameInputField.text ?? "";
 		if (!ConfigManager.Instance.DisableModForSelf && __instance.hostSettings_LobbyPublic)
 		{
 			if (!text.Contains('\u200b'))
@@ -34,6 +39,3 @@ internal class LobbyListPatch
 		}
 	}
 }
-
-
-
