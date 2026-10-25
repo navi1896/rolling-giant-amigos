@@ -296,7 +296,12 @@ internal static class EnemyConfiguration
 
 	public static bool IsEnemyAllowlisted(this EnemyAI enemyAI)
 	{
-		return ALLOWLISTED_ENEMIES.Contains(((object)enemyAI).GetType());
+		if ((Object)(object)enemyAI == (Object)null)
+		{
+			return false;
+		}
+		Type type = ((object)enemyAI).GetType();
+		return ALLOWLISTED_ENEMIES.Contains(type) || type.Assembly != typeof(EnemyAI).Assembly;
 	}
 
 	public static bool IsEnemyExperimental(this EnemyAI enemyAI)
