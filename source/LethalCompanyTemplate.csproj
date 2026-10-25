@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 	<!-- BepInEx Properties -->
 	<PropertyGroup>
 		<AssemblyName>RollingGiant</AssemblyName>
 		<Product>RollingGiant</Product>
-		<Description>Adds an inventory to the ship, allowing it to store items and retrieve them.</Description>
+		<Description>Rolling Giant for Lethal Company V81 with ControlCompany compatibility.</Description>
 		<LangVersion>Latest</LangVersion>
 	</PropertyGroup>
 
@@ -25,6 +25,13 @@
 		<PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
 	</ItemGroup>
 
+	<!-- Optional/External Mod Compatibility Reference (never bundled) -->
+	<ItemGroup>
+		<Reference Include="ControlCompany" Publicize="true" Private="false">
+			<HintPath>..\libs\ControlCompany.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
 	<Target Name="NetcodePatch" AfterTargets="PostBuildEvent">
 		<PropertyGroup>
 			<NetcodePatcherDepsListFile>$(IntermediateOutputPath)ncp-deps.list</NetcodePatcherDepsListFile>
@@ -32,6 +39,4 @@
 		<WriteLinesToFile File="$(NetcodePatcherDepsListFile)" Lines="@(ReferencePathWithRefAssemblies)" Overwrite="true" />
 		<Exec Command="netcode-patch -uv 2022.3.62 -nv 1.12.2 -tv 1.0.0 &quot;$(TargetPath)&quot; --dependency-file &quot;$(NetcodePatcherDepsListFile)&quot;" />
 	</Target>
-
-
 </Project>

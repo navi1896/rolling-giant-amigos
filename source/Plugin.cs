@@ -3,6 +3,8 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using BepInEx.Bootstrap;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
@@ -21,6 +23,7 @@ using MonoMod.RuntimeDetour;
 namespace RollingGiant;
 
 [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
+[BepInDependency("ControlCompany.ControlCompany", BepInDependency.DependencyFlags.SoftDependency)]
 public class Plugin : BaseUnityPlugin {
     public const string PluginGuid = "nomnomab.rollinggiant";
     public const string PluginName = "Rolling Giant";
@@ -57,14 +60,26 @@ public class Plugin : BaseUnityPlugin {
 
         LoadAssets();
         LoadNetWeaver();
-        Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
-        try { ControlCompany.ControlCompanyPlugin.EnsureInitialized(base.Config); } catch (Exception ex) { Logger.LogError(ex); }
+        var harmony = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
+        if (Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
+            try { InitializeControlCompanyCompat(harmony); } catch (Exception ex) { Logger.LogError(ex); }
+        }
         
         Logger.LogInfo($"Plugin {PluginGuid} is loaded!");
     }
 
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void InitializeControlCompanyCompat(Harmony harmony) {
+        Compatibility.ControlCompanyCompat.Initialize(harmony);
+    }
+
     private void LoadNetWeaver() {
-        var types = Assembly.GetExecutingAssembly().GetTypes();
+        Type[] types;
+        try {
+            types = Assembly.GetExecutingAssembly().GetTypes();
+        } catch (ReflectionTypeLoadException ex) {
+            types = ex.Types.Where(t => t != null).ToArray()!;
+        }
         foreach (var type in types) {
             // ? prevents the compatibility layer from crashing the plugin loading
             try {
