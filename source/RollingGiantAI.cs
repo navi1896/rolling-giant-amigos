@@ -1291,6 +1291,9 @@ public class RollingGiantAI : EnemyAI {
       }
 
       targetPlayer = FindPlayerByClientId(targetClientId);
+
+      // Play broken lightbulb pop overhead in the ship ceiling for anyone inside
+      ShipAmbush.ShipAmbushAudio.PlayBulbShatterForShipPlayer(StartOfRound.Instance);
    }
 
    [ClientRpc]
@@ -1298,7 +1301,7 @@ public class RollingGiantAI : EnemyAI {
       if (_shipAmbushPhase != ShipAmbushPhase.WaitingToBeSeen) return;
 
       _shipAmbushPhase = ShipAmbushPhase.SeenPause;
-      _shipAmbushStateTimer = 0.45f;
+      _shipAmbushStateTimer = 0.55f;
       _shipAmbushAttackSpeed = 0f;
 
       var spottedBy = FindPlayerByClientId(spottedByClientId);
@@ -1306,11 +1309,19 @@ public class RollingGiantAI : EnemyAI {
          targetPlayer = spottedBy;
       }
 
-      PlayLocalStopSound();
+      var round = StartOfRound.Instance;
+      var isLocalInShip = ShipAmbush.ShipAmbushAudio.IsLocalPlayerInShip(round);
 
-      var localPlayer = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
-      if (localPlayer != null && !localPlayer.isPlayerDead && localPlayer.isInHangarShipRoom) {
-         localPlayer.JumpToFearLevel(0.9f);
+      if (isLocalInShip) {
+         // Exclusively for the player inside the ship: play the scary violin!
+         ShipAmbush.ShipAmbushAudio.PlayScaryViolinForShipPlayer(round);
+
+         var localPlayer = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
+         if (localPlayer != null && !localPlayer.isPlayerDead) {
+            localPlayer.JumpToFearLevel(1.0f);
+         }
+      } else {
+         PlayLocalStopSound();
       }
    }
 
@@ -1343,6 +1354,7 @@ public class RollingGiantAI : EnemyAI {
       _shipAmbushStateTimer = 0f;
       _shipAmbushNoInsidePlayerTimer = 0f;
       movingTowardsTargetPlayer = false;
+      ShipAmbush.ShipAmbushAudio.FadeOutScaryViolin(0.8f);
       SwitchToBehaviourStateOnLocalClient(0);
    }
 
@@ -1555,7 +1567,11 @@ public class RollingGiantAI : EnemyAI {
 
       _shipAmbushNoInsidePlayerTimer = 0f;
       targetPlayer = bestShipVictim;
-      var chaseSpeed = Mathf.Max(_sharedAiSettings.moveSpeed, 7.2f);
+
+      // 60% of normal speed so the Giant creeps in slowly while the eerie violin plays
+      var speedMult = Mathf.Clamp(ShipAmbush.ShipAmbushSettings.AmbushSpeedMultiplier.Value, 0.2f, 2.0f);
+      var baseSpeed = _sharedAiSettings.moveSpeed > 0.5f ? _sharedAiSettings.moveSpeed : 6f;
+      var chaseSpeed = baseSpeed * speedMult;
       _shipAmbushAttackSpeed = chaseSpeed;
 
       var usedNavAgent = false;
@@ -1563,10 +1579,10 @@ public class RollingGiantAI : EnemyAI {
          EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: true);
          agent.isStopped = false;
          agent.speed = chaseSpeed;
-         agent.acceleration = 120f;
-         agent.angularSpeed = 420f;
+         agent.acceleration = 90f;
+         agent.angularSpeed = 380f;
          agent.SetDestination(bestShipVictim.transform.position);
-         usedNavAgent = _shipAmbushStateTimer < 0.25f || agent.velocity.magnitude > 0.65f;
+         usedNavAgent = _shipAmbushStateTimer < 0.25f || agent.velocity.magnitude > Mathf.Min(0.40f, chaseSpeed * 0.25f);
       }
 
       // Threshold / furniture assist: if NavMeshAgent hesitates crossing the ship door lip, glide straight toward the victim on the ship floor!

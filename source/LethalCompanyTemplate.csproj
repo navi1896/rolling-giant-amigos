@@ -25,6 +25,11 @@
 		<PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<EmbeddedResource Include="ShipAmbush\Audio\ShipBulbShatter.wav" LogicalName="RollingGiant.ShipAmbush.ShipBulbShatter.wav" />
+		<EmbeddedResource Include="ShipAmbush\Audio\ShipScaryViolin.wav" LogicalName="RollingGiant.ShipAmbush.ShipScaryViolin.wav" />
+	</ItemGroup>
+
 	<Target Name="NetcodePatch" AfterTargets="PostBuildEvent">
 		<PropertyGroup>
 			<NetcodePatcherDepsListFile>$(IntermediateOutputPath)ncp-deps.list</NetcodePatcherDepsListFile>

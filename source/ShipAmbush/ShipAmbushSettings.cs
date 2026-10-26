@@ -9,6 +9,11 @@ internal static class ShipAmbushSettings {
     public static ConfigEntry<float> ChancePercent;
     public static ConfigEntry<bool> OnlyWhenAloneInShip;
     public static ConfigEntry<bool> DespawnAfterKill;
+    public static ConfigEntry<float> AmbushSpeedMultiplier;
+    public static ConfigEntry<bool> PlayBulbShatterOnBlackout;
+    public static ConfigEntry<float> BulbShatterVolume;
+    public static ConfigEntry<bool> PlayScaryViolinWhenSeen;
+    public static ConfigEntry<float> ScaryViolinVolume;
     public static ConfigEntry<float> RollIntervalSeconds;
     public static ConfigEntry<float> MinSecondsAfterLanding;
     public static ConfigEntry<float> MinDistractedSeconds;
@@ -24,6 +29,16 @@ internal static class ShipAmbushSettings {
             "Requires strictly one living player to be inside the ship (completely alone) for the ambush to trigger.");
         DespawnAfterKill = config.Bind(section, "DespawnAfterKill", true,
             "If true, after killing the lone player inside the ship, the ambush Giant vanishes once no living player can see it instead of staying around the ship.");
+        AmbushSpeedMultiplier = config.Bind(section, "AmbushSpeedMultiplier", 0.60f,
+            "Movement speed multiplier when the Giant charges inside the ship during the ambush (0.60 = 60% of normal speed).");
+        PlayBulbShatterOnBlackout = config.Bind(section, "PlayBulbShatterOnBlackout", true,
+            "If true, plays an electric pop and shattered lightbulb sound effect when the ship lights snap off.");
+        BulbShatterVolume = config.Bind(section, "BulbShatterVolume", 0.95f,
+            "Volume (0.0 to 1.0) for the broken lightbulb sound effect.");
+        PlayScaryViolinWhenSeen = config.Bind(section, "PlayScaryViolinWhenSeen", true,
+            "If true, plays the iconic eerie horror violin music exclusively for the lone player inside the ship when they spot the Giant.");
+        ScaryViolinVolume = config.Bind(section, "ScaryViolinVolume", 0.95f,
+            "Volume (0.0 to 1.0) for the scary violin audio.");
         RollIntervalSeconds = config.Bind(section, "RollIntervalSeconds", 300f,
             "Interval in seconds between automatic 10% ambush rolls once a player is completely alone and distracted inside the ship. Default is 300s (5 minutes).");
         MinSecondsAfterLanding = config.Bind(section, "MinSecondsAfterLanding", 25f,

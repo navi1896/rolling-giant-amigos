@@ -6,6 +6,11 @@ Paquete personalizado de **Rolling Giant** para **Lethal Company V81**, basado e
 
 A customized **Rolling Giant** package for **Lethal Company V81**, based on the MIT-licensed upstream Rolling Giant mod.
 
+## Version 2.1.0
+
+- Sonido de foco reventado en el apagón de la nave, violín tétrico exclusivo para la víctima y velocidad al 60%.
+- Broken lightbulb blackout sound, eerie horror violin for the ship victim, and 60% stalk speed.
+
 ## Version 2.0.0
 
 - Corrección de bugs de navegación al entrar y salir de las instalaciones y mejoras generales de estabilidad en V81.

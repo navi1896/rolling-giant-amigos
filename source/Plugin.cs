@@ -66,6 +66,7 @@ public class Plugin : BaseUnityPlugin {
         // Built-in ghost mode / monster possession (Crew Control). Stays off if ControlCompany is installed.
         try {
             ShipAmbush.ShipAmbushSettings.Bind(base.Config);
+            ShipAmbush.ShipAmbushAudio.Init();
             CrewControl.CrewControlSettings.Bind(base.Config);
             if (CrewControl.CrewControlSettings.Enabled.Value
                 && !Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
