@@ -6,10 +6,17 @@ Paquete personalizado de **Rolling Giant** para **Lethal Company V81**, basado e
 
 A customized **Rolling Giant** package for **Lethal Company V81**, based on the MIT-licensed upstream Rolling Giant mod.
 
+## Version 2.1.2
+
+- Cooldown de transición en puertas de entrada y salida (2.5s) para dar tiempo al jugador de reaccionar tanto al salir como al entrar del complejo.
+- Pausa en puerta de la nave reducida de 6 a 4 segundos al ser detectado para un ataque más ágil y tenso.
+- Entrance transition delay (2.5s) to match player door transitions and prevent instant kills.
+- Ship ambush detection pause shortened to 4 seconds for tighter pacing.
+
 ## Version 2.1.1
 
-- Pausa de 6 segundos al detectar al jugador en la puerta y violín tétrico con volumen aumentado que escala por proximidad hasta desaparecer.
-- 6-second tense pause on detection and louder scary violin scaling by proximity until despawn.
+- Pausa al detectar al jugador en la puerta y violín tétrico con volumen aumentado que escala por proximidad hasta desaparecer.
+- Tense pause on detection and louder scary violin scaling by proximity until despawn.
 
 ## Version 2.1.0
 
@@ -26,7 +33,7 @@ A customized **Rolling Giant** package for **Lethal Company V81**, based on the 
 ## Características principales / Core Features
 
 - Garantiza la aparición de un Rolling Giant dentro de las instalaciones cerca de la entrada principal cuando el reloj marca las **5:00 PM**, una vez por ronda activa (sin cancelar apariciones aleatorias previas).
-- Si el Rolling Giant persigue a un jugador que cruza una puerta de entrada o salida conectada, continúa la persecución del otro lado usando el NavMesh correspondiente.
+- Si el Rolling Giant persigue a un jugador que cruza una puerta de entrada o salida conectada, continúa la persecución del otro lado tras un cooldown equitativo usando el NavMesh correspondiente.
 - Incluye la textura personalizada en escala de grises para todos los jugadores que tengan el paquete instalado.
 
 ## Instalación / Installation

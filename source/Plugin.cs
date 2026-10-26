@@ -67,6 +67,7 @@ public class Plugin : BaseUnityPlugin {
         try {
             ShipAmbush.ShipAmbushSettings.Bind(base.Config);
             ShipAmbush.ShipAmbushAudio.Init();
+            EntranceTransitionSettings.Bind(base.Config);
             CrewControl.CrewControlSettings.Bind(base.Config);
             if (CrewControl.CrewControlSettings.Enabled.Value
                 && !Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {

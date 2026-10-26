@@ -14,6 +14,7 @@ internal static class ShipAmbushSettings {
     public static ConfigEntry<float> BulbShatterVolume;
     public static ConfigEntry<bool> PlayScaryViolinWhenSeen;
     public static ConfigEntry<float> ScaryViolinVolume;
+    public static ConfigEntry<float> SeenPauseSeconds;
     public static ConfigEntry<float> RollIntervalSeconds;
     public static ConfigEntry<float> MinSecondsAfterLanding;
     public static ConfigEntry<float> MinDistractedSeconds;
@@ -39,6 +40,8 @@ internal static class ShipAmbushSettings {
             "If true, plays the iconic eerie horror violin music exclusively for the lone player inside the ship when they spot the Giant.");
         ScaryViolinVolume = config.Bind(section, "ScaryViolinVolume", 0.95f,
             "Volume (0.0 to 1.0) for the scary violin audio.");
+        SeenPauseSeconds = config.Bind(section, "SeenPauseSeconds", 4.0f,
+            "Duration in seconds the Giant stares motionlessly in the doorway after being spotted before charging inside the ship (was 6.0s in v2.1.1, now 4.0s).");
         RollIntervalSeconds = config.Bind(section, "RollIntervalSeconds", 300f,
             "Interval in seconds between automatic 10% ambush rolls once a player is completely alone and distracted inside the ship. Default is 300s (5 minutes).");
         MinSecondsAfterLanding = config.Bind(section, "MinSecondsAfterLanding", 25f,

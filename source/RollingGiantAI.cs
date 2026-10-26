@@ -1,6 +1,7 @@
+using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using GameNetcodeStuff;
 using RollingGiant.Settings;
-using System.Diagnostics.CodeAnalysis;
 using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.AI;
@@ -38,6 +39,8 @@ public class RollingGiantAI : EnemyAI {
    private bool _factoryExitRequestPending;
    private bool _hasExitedFactory;
    private float _retryFactoryExitRequestAfter;
+   private bool _isTransitioningEntrance;
+   private Coroutine? _entranceTransitionCoroutine;
 
    private enum ShipAmbushPhase {
       None = 0,
@@ -165,6 +168,12 @@ public class RollingGiantAI : EnemyAI {
 
    public void ResetValues() {
       if (IsHost || IsServer) {
+         if (_entranceTransitionCoroutine != null) {
+            StopCoroutine(_entranceTransitionCoroutine);
+            _entranceTransitionCoroutine = null;
+         }
+         _isTransitioningEntrance = false;
+         _factoryExitRequestPending = false;
          _waitTimer.Value = 0;
          _moveTimer.Value = 0;
          _lookTimer.Value = 0;
@@ -177,6 +186,8 @@ public class RollingGiantAI : EnemyAI {
 
    [ClientRpc]
    private void ResetValues_ClientRpc() {
+      _isTransitioningEntrance = false;
+      _factoryExitRequestPending = false;
       _isAgro = false;
       _wasStopped = false;
       _wasFeared = false;
@@ -194,7 +205,7 @@ public class RollingGiantAI : EnemyAI {
    }
 
    public override void DoAIInterval() {
-      if (daytimeEnemyLeaving) {
+      if (daytimeEnemyLeaving || _isTransitioningEntrance) {
          _mainCollider.isTrigger = true;
          return;
       }
@@ -300,6 +311,8 @@ public class RollingGiantAI : EnemyAI {
       if (IsHost || IsServer) {
          if (_shipAmbushPhase != ShipAmbushPhase.None) {
             _velocity.Value = _shipAmbushPhase == ShipAmbushPhase.Attacking ? _shipAmbushAttackSpeed : 0f;
+         } else if (_isTransitioningEntrance) {
+            _velocity.Value = 0f;
          } else {
             if (!IsPlayerControlled && agent != null && !agent.enabled) {
                EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: !_tooBig);
@@ -671,6 +684,10 @@ public class RollingGiantAI : EnemyAI {
          return false;
       }
 
+      if (_isTransitioningEntrance || _factoryExitRequestPending) {
+         return true;
+      }
+
       if (Time.time < _retryFactoryExitRequestAfter) {
          return _factoryExitRequestPending;
       }
@@ -694,7 +711,7 @@ public class RollingGiantAI : EnemyAI {
                 Vector3.Distance(player.transform.position, outsideEntrance.transform.position) > 35f) continue;
 
             _factoryExitRequestPending = true;
-            _retryFactoryExitRequestAfter = Time.time + 2f;
+            _retryFactoryExitRequestAfter = Time.time + 5f;
             RequestFactoryExitServerRpc(insideEntrance.entranceId, (int)player.playerClientId);
             return true;
          }
@@ -716,7 +733,7 @@ public class RollingGiantAI : EnemyAI {
                 Vector3.Distance(player.transform.position, insideEntrance.transform.position) > 35f) continue;
 
             _factoryExitRequestPending = true;
-            _retryFactoryExitRequestAfter = Time.time + 2f;
+            _retryFactoryExitRequestAfter = Time.time + 5f;
             RequestFactoryExitServerRpc(insideEntrance.entranceId, (int)player.playerClientId);
             return true;
          }
@@ -728,6 +745,7 @@ public class RollingGiantAI : EnemyAI {
    [ServerRpc(RequireOwnership = false)]
    private void RequestFactoryExitServerRpc(int entranceId, int targetPlayerClientId) {
       if (!IsServer) return;
+      if (_isTransitioningEntrance) return;
       if (!TryGetEntrancePair(entranceId, out var insideEntrance, out var outsideEntrance)) return;
 
       var targetPlayer = FindPlayerByClientId(targetPlayerClientId);
@@ -741,53 +759,121 @@ public class RollingGiantAI : EnemyAI {
          ? outsideEntrance.entrancePoint.position
          : outsideEntrance.transform.position;
 
+      EntranceTeleport currentEntrance;
+      EntranceTeleport targetEntrance;
+      bool nowOutside;
+
       if (!isOutside) {
          if (Vector3.Distance(transform.position, insideDoorPosition) > 20f &&
              Vector3.Distance(transform.position, insideEntrance.transform.position) > 20f) return;
          if (Vector3.Distance(targetPlayer.transform.position, outsideDoorPosition) > 40f &&
              Vector3.Distance(targetPlayer.transform.position, outsideEntrance.transform.position) > 40f) return;
 
-         var arrivalPosition = EntranceNavigationHelper.ResolveSafeArrivalPosition(
-            outsideEntrance,
-            agent,
-            allowOffMeshPlatformFallback: false,
-            out var arrivalYaw);
-
-         _hasExitedFactory = true;
-         var networkObject = GetComponent<NetworkObject>();
-         if (networkObject != null && networkObject.IsSpawned && networkObject.OwnerClientId != NetworkManager.ServerClientId) {
-            networkObject.ChangeOwnership(NetworkManager.ServerClientId);
-         }
-
-         FollowPlayerOutsideClientRpc(arrivalPosition, arrivalYaw, targetPlayerClientId, true);
+         currentEntrance = insideEntrance;
+         targetEntrance = outsideEntrance;
+         nowOutside = true;
       } else {
          if (Vector3.Distance(transform.position, outsideDoorPosition) > 20f &&
              Vector3.Distance(transform.position, outsideEntrance.transform.position) > 20f) return;
          if (Vector3.Distance(targetPlayer.transform.position, insideDoorPosition) > 40f &&
              Vector3.Distance(targetPlayer.transform.position, insideEntrance.transform.position) > 40f) return;
 
-         var arrivalPosition = EntranceNavigationHelper.ResolveSafeArrivalPosition(
-            insideEntrance,
-            agent,
-            allowOffMeshPlatformFallback: false,
-            out var arrivalYaw);
+         currentEntrance = outsideEntrance;
+         targetEntrance = insideEntrance;
+         nowOutside = false;
+      }
 
-         _hasExitedFactory = false;
-         var networkObject = GetComponent<NetworkObject>();
-         if (networkObject != null && networkObject.IsSpawned && networkObject.OwnerClientId != NetworkManager.ServerClientId) {
-            networkObject.ChangeOwnership(NetworkManager.ServerClientId);
+      var networkObject = GetComponent<NetworkObject>();
+      if (networkObject != null && networkObject.IsSpawned && networkObject.OwnerClientId != NetworkManager.ServerClientId) {
+         networkObject.ChangeOwnership(NetworkManager.ServerClientId);
+      }
+
+      var delay = EntranceTransitionSettings.TransitionDelaySeconds != null
+         ? Mathf.Max(0.5f, EntranceTransitionSettings.TransitionDelaySeconds.Value)
+         : 2.5f;
+
+      var playDoorSound = EntranceTransitionSettings.PlayDoorSoundOnTransition == null ||
+                          EntranceTransitionSettings.PlayDoorSoundOnTransition.Value;
+
+      if (playDoorSound) {
+         try {
+            currentEntrance.PlayAudioAtTeleportPositions();
+         } catch { }
+      }
+
+      if (_entranceTransitionCoroutine != null) {
+         StopCoroutine(_entranceTransitionCoroutine);
+      }
+      _entranceTransitionCoroutine = StartCoroutine(TransitionThroughEntranceCoroutine(
+         targetEntrance,
+         targetPlayerClientId,
+         nowOutside,
+         delay));
+   }
+
+   private IEnumerator TransitionThroughEntranceCoroutine(
+      EntranceTeleport targetEntrance,
+      int targetPlayerClientId,
+      bool nowOutside,
+      float delaySeconds) {
+      _isTransitioningEntrance = true;
+      _factoryExitRequestPending = true;
+      _retryFactoryExitRequestAfter = Time.time + delaySeconds + 3.0f;
+
+      if (agent != null && agent.isOnNavMesh) {
+         agent.isStopped = true;
+         agent.velocity = Vector3.zero;
+      }
+
+      NotifyEntranceTransitionClientRpc(true);
+
+      if (delaySeconds > 0.05f) {
+         yield return new WaitForSeconds(delaySeconds);
+      }
+
+      _isTransitioningEntrance = false;
+
+      if (isEnemyDead || this == null || targetEntrance == null) {
+         _factoryExitRequestPending = false;
+         yield break;
+      }
+
+      if (StartOfRound.Instance == null || !StartOfRound.Instance.shipHasLanded) {
+         _factoryExitRequestPending = false;
+         yield break;
+      }
+
+      var arrivalPosition = EntranceNavigationHelper.ResolveSafeArrivalPosition(
+         targetEntrance,
+         agent,
+         allowOffMeshPlatformFallback: false,
+         out var arrivalYaw);
+
+      _hasExitedFactory = nowOutside;
+      FollowPlayerOutsideClientRpc(arrivalPosition, arrivalYaw, targetPlayerClientId, nowOutside);
+   }
+
+   [ClientRpc]
+   private void NotifyEntranceTransitionClientRpc(bool isTransitioning) {
+      _isTransitioningEntrance = isTransitioning;
+      _factoryExitRequestPending = isTransitioning;
+      if (isTransitioning) {
+         _retryFactoryExitRequestAfter = Time.time + 4.0f;
+         if (agent != null && agent.isOnNavMesh) {
+            agent.isStopped = true;
+            agent.velocity = Vector3.zero;
          }
-
-         FollowPlayerOutsideClientRpc(arrivalPosition, arrivalYaw, targetPlayerClientId, false);
       }
    }
 
    [ClientRpc]
    private void FollowPlayerOutsideClientRpc(Vector3 position, float yaw, int targetPlayerClientId, bool nowOutside) {
+      _isTransitioningEntrance = false;
+      _factoryExitRequestPending = false;
+      _retryFactoryExitRequestAfter = Time.time + 2.0f;
+      _timeSinceHittingPlayer = 0.2f;
       isOutside = nowOutside;
       _hasExitedFactory = nowOutside;
-      _factoryExitRequestPending = false;
-      _retryFactoryExitRequestAfter = Time.time + 1.5f;
       SetEnemyOutside(nowOutside);
       allAINodes = GameObject.FindGameObjectsWithTag(nowOutside ? "OutsideAINode" : "AINode");
 
@@ -850,7 +936,7 @@ public class RollingGiantAI : EnemyAI {
    }
 
    public override void OnCollideWithPlayer(Collider other) {
-      if (daytimeEnemyLeaving) {
+      if (daytimeEnemyLeaving || _isTransitioningEntrance) {
          return;
       }
 
@@ -882,8 +968,9 @@ public class RollingGiantAI : EnemyAI {
    }
 
    private void CalculateAgentSpeed() {
-      if (stunNormalizedTimer >= 0) {
+      if (stunNormalizedTimer >= 0 || _isTransitioningEntrance) {
          agent.speed = 0;
+         if (agent.isOnNavMesh) agent.velocity = Vector3.zero;
          agent.acceleration = 200;
          return;
       }
@@ -1301,7 +1388,9 @@ public class RollingGiantAI : EnemyAI {
       if (_shipAmbushPhase != ShipAmbushPhase.WaitingToBeSeen) return;
 
       _shipAmbushPhase = ShipAmbushPhase.SeenPause;
-      _shipAmbushStateTimer = 6.0f;
+      _shipAmbushStateTimer = ShipAmbush.ShipAmbushSettings.SeenPauseSeconds != null
+         ? ShipAmbush.ShipAmbushSettings.SeenPauseSeconds.Value
+         : 4.0f;
       _shipAmbushAttackSpeed = 0f;
 
       var spottedBy = FindPlayerByClientId(spottedByClientId);
@@ -1637,6 +1726,11 @@ public class RollingGiantAI : EnemyAI {
 
    public override void OnNetworkDespawn() {
       base.OnNetworkDespawn();
+      if (_entranceTransitionCoroutine != null) {
+         StopCoroutine(_entranceTransitionCoroutine);
+         _entranceTransitionCoroutine = null;
+      }
+      _isTransitioningEntrance = false;
       if (IsInShipAmbush) {
          ShipAmbush.ShipAmbushAudio.CutOffScaryViolin();
       }
@@ -1644,6 +1738,11 @@ public class RollingGiantAI : EnemyAI {
 
    public override void OnDestroy() {
       base.OnDestroy();
+      if (_entranceTransitionCoroutine != null) {
+         StopCoroutine(_entranceTransitionCoroutine);
+         _entranceTransitionCoroutine = null;
+      }
+      _isTransitioningEntrance = false;
       if (IsInShipAmbush) {
          ShipAmbush.ShipAmbushAudio.CutOffScaryViolin();
       }
