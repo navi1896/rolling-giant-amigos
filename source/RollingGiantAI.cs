@@ -1301,7 +1301,7 @@ public class RollingGiantAI : EnemyAI {
       if (_shipAmbushPhase != ShipAmbushPhase.WaitingToBeSeen) return;
 
       _shipAmbushPhase = ShipAmbushPhase.SeenPause;
-      _shipAmbushStateTimer = 0.55f;
+      _shipAmbushStateTimer = 6.0f;
       _shipAmbushAttackSpeed = 0f;
 
       var spottedBy = FindPlayerByClientId(spottedByClientId);

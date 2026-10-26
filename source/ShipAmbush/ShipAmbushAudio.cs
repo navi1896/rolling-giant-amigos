@@ -214,8 +214,8 @@ internal static class ShipAmbushAudio {
             _violinSource.Stop();
             _violinSource.clip = clip;
             _baseViolinVolume = volume;
-            // Start at 20% volume when seen at the doorway, will increase as Giant approaches
-            _violinSource.volume = volume * 0.20f;
+            // Start at 60% volume when seen at the doorway, will increase up to 100% as Giant approaches
+            _violinSource.volume = volume * 0.60f;
             _targetVolume = _violinSource.volume;
             _fadingViolin = false;
             _localDeadTimer = 0f;
@@ -229,9 +229,9 @@ internal static class ShipAmbushAudio {
                 // Keep at maximum intensity during the kill until the monster despawns
                 _targetVolume = _baseViolinVolume;
             } else {
-                // Scaled from doorway (~8.5m) to melee distance (~1.2m)
+                // Scaled from doorway (~8.5m) to melee distance (~1.2m), rising from 60% up to 100%
                 float t = Mathf.InverseLerp(8.5f, 1.2f, distance);
-                float factor = Mathf.Lerp(0.20f, 1.0f, t);
+                float factor = Mathf.Lerp(0.60f, 1.0f, t);
                 _targetVolume = _baseViolinVolume * factor;
             }
 
