@@ -2,10 +2,10 @@
 
 A customized Rolling Giant package for Lethal Company V81, based on the MIT-licensed upstream Rolling Giant mod and including native compatibility enhancements for **ControlCompany**.
 
-## Version 1.1.0
+## Version 1.2.0
 
-- Automatically installs and integrates with **ControlCompany (`ControlCompany-ControlCompany-1.3.3`)** via a built-in compatibility bridge, allowing the host to enter Ghost Mode (`F1`), cycle spectated players (`O` / `P`), toggle the UI (`U`), and control monsters (`F1`–`F12`).
-- Fixes ControlCompany 1.3.3's Ghost Mode / Monster Mode top-right UI list rendering issue on **Lethal Company V81**.
+- Switches to official **ControlCompany (`ControlCompany-ControlCompany-1.3.3`)** as a Thunderstore dependency paired with a clean Harmony compatibility bridge (removing any embedded third-party code).
+- Fixes ControlCompany 1.3.3's Ghost Mode / Monster Mode top-right UI list rendering issue and startup input initialization timing on **Lethal Company V81**.
 - Adds full direct player control for the **Rolling Giant** (`F1` in Ghost Mode, both indoors and outdoors), including synced rolling audio, strangulation collision attack, manual stop-sound trigger (`LMB`), force-move while watched (`Hold RMB`), and toggling between manual and AI control (`F1`).
 - Automatically enables controlling monsters added by **other enemy mods** alongside all base-game monsters directly from the Ghost Mode spawn list (`F1`–`F12`).
 - Lets the Rolling Giant both **exit and re-enter** the facility through paired entrance doors (automatically when chasing a player who goes back inside, or manually by pressing `E` at a door while controlling the Giant).
