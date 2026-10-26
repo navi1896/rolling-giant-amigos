@@ -6,7 +6,7 @@ Paquete personalizado de **Rolling Giant** para **Lethal Company V81**, basado e
 
 A customized **Rolling Giant** package for **Lethal Company V81**, based on the MIT-licensed upstream Rolling Giant mod.
 
-## Version 2.1.2
+## Version 2.1.3
 
 - Corrección en el cooldown al entrar y salir de las instalaciones (el monstruo tarda lo mismo que un jugador en cruzar).
 - Facility entrance and exit transition cooldown fix (the monster takes the same time as a player to cross).

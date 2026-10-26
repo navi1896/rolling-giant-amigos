@@ -1,7 +1,12 @@
-## 2.1.2
+## 2.1.3
 
 - Corrección en el cooldown al entrar y salir de las instalaciones: el monstruo tarda lo mismo que un jugador en cruzar la puerta, evitando que aparezca instantáneamente.
 - Facility entrance/exit cooldown fix: the monster now takes the same transition time as a player, preventing instant teleports.
+
+## 2.1.2
+
+- Ajustes menores.
+- Minor adjustments.
 
 ## 2.1.1
 
