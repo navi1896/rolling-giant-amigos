@@ -119,8 +119,8 @@ internal sealed class ShipAmbushManager : MonoBehaviour {
         if (_distractedDuration < ShipAmbushSettings.MinDistractedSeconds.Value) return;
         if (Time.time < _nextRandomRollTime) return;
 
-        // Schedule next eligible check window so the 10% roll is a clean per-window probability.
-        _nextRandomRollTime = Time.time + Mathf.Max(15f, ShipAmbushSettings.CheckCooldownSeconds.Value);
+        // Schedule next eligible check window in 5 minutes (300s) so the 10% roll happens once every 5 minutes.
+        _nextRandomRollTime = Time.time + Mathf.Max(15f, ShipAmbushSettings.RollIntervalSeconds.Value);
 
         var chance = Mathf.Clamp01(ShipAmbushSettings.ChancePercent.Value / 100f);
         var roll = Random.value;

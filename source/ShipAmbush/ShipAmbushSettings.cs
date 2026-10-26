@@ -9,7 +9,7 @@ internal static class ShipAmbushSettings {
     public static ConfigEntry<float> ChancePercent;
     public static ConfigEntry<bool> OnlyWhenAloneInShip;
     public static ConfigEntry<bool> DespawnAfterKill;
-    public static ConfigEntry<float> CheckCooldownSeconds;
+    public static ConfigEntry<float> RollIntervalSeconds;
     public static ConfigEntry<float> MinSecondsAfterLanding;
     public static ConfigEntry<float> MinDistractedSeconds;
     public static ConfigEntry<Key> HostTestKey;
@@ -24,8 +24,8 @@ internal static class ShipAmbushSettings {
             "Requires strictly one living player to be inside the ship (completely alone) for the ambush to trigger.");
         DespawnAfterKill = config.Bind(section, "DespawnAfterKill", true,
             "If true, after killing the lone player inside the ship, the ambush Giant vanishes once no living player can see it instead of staying around the ship.");
-        CheckCooldownSeconds = config.Bind(section, "CheckCooldownSeconds", 55f,
-            "Minimum cooldown in seconds between random 10% ambush checks while a player inside the ship is distracted.");
+        RollIntervalSeconds = config.Bind(section, "RollIntervalSeconds", 300f,
+            "Interval in seconds between automatic 10% ambush rolls once a player is completely alone and distracted inside the ship. Default is 300s (5 minutes).");
         MinSecondsAfterLanding = config.Bind(section, "MinSecondsAfterLanding", 25f,
             "Minimum seconds after the ship lands on a moon before random ambush checks begin.");
         MinDistractedSeconds = config.Bind(section, "MinDistractedSeconds", 2.0f,
