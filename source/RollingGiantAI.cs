@@ -1354,7 +1354,7 @@ public class RollingGiantAI : EnemyAI {
       _shipAmbushStateTimer = 0f;
       _shipAmbushNoInsidePlayerTimer = 0f;
       movingTowardsTargetPlayer = false;
-      ShipAmbush.ShipAmbushAudio.FadeOutScaryViolin(0.8f);
+      ShipAmbush.ShipAmbushAudio.CutOffScaryViolin();
       SwitchToBehaviourStateOnLocalClient(0);
    }
 
@@ -1365,6 +1365,16 @@ public class RollingGiantAI : EnemyAI {
       _timeSinceHittingPlayer += Time.deltaTime;
       isInsidePlayerShip = round.shipInnerRoomBounds != null
          && round.shipInnerRoomBounds.bounds.Contains(transform.position + Vector3.up * 0.5f);
+
+      if (_shipAmbushPhase == ShipAmbushPhase.SeenPause || _shipAmbushPhase == ShipAmbushPhase.Attacking) {
+         if (ShipAmbush.ShipAmbushAudio.IsViolinPlaying()) {
+            var localPlayer = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
+            if (localPlayer != null) {
+               float distToLocal = Vector3.Distance(transform.position, localPlayer.transform.position);
+               ShipAmbush.ShipAmbushAudio.UpdateViolinProximity(distToLocal, localPlayer.isPlayerDead);
+            }
+         }
+      }
 
       if (_shipAmbushPhase == ShipAmbushPhase.WaitingToBeSeen || _shipAmbushPhase == ShipAmbushPhase.SeenPause) {
          _mainCollider.isTrigger = true;
@@ -1616,11 +1626,26 @@ public class RollingGiantAI : EnemyAI {
 
    internal void DespawnAmbushGiant() {
       if (!IsServer) return;
+      EndShipAmbush_ClientRpc();
       if (RoundManager.Instance != null && RoundManager.Instance.SpawnedEnemies != null) {
          RoundManager.Instance.SpawnedEnemies.Remove(this);
       }
       if (NetworkObject != null && NetworkObject.IsSpawned) {
          NetworkObject.Despawn(true);
+      }
+   }
+
+   public override void OnNetworkDespawn() {
+      base.OnNetworkDespawn();
+      if (IsInShipAmbush) {
+         ShipAmbush.ShipAmbushAudio.CutOffScaryViolin();
+      }
+   }
+
+   public override void OnDestroy() {
+      base.OnDestroy();
+      if (IsInShipAmbush) {
+         ShipAmbush.ShipAmbushAudio.CutOffScaryViolin();
       }
    }
 

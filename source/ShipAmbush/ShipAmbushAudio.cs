@@ -84,6 +84,20 @@ internal static class ShipAmbushAudio {
         runner.PlayScaryViolin(ScaryViolinClip, Mathf.Clamp01(ShipAmbushSettings.ScaryViolinVolume.Value));
     }
 
+    public static bool IsViolinPlaying() {
+        return _runner != null && _runner.IsViolinPlaying;
+    }
+
+    public static void UpdateViolinProximity(float distance, bool isDead) {
+        if (_runner == null) return;
+        _runner.UpdateProximity(distance, isDead);
+    }
+
+    public static void CutOffScaryViolin() {
+        if (_runner == null) return;
+        _runner.CutOffViolin();
+    }
+
     public static void FadeOutScaryViolin(float fadeSeconds = 1.0f) {
         if (_runner == null) return;
         _runner.BeginFadeOut(fadeSeconds);
@@ -161,9 +175,13 @@ internal static class ShipAmbushAudio {
     private sealed class ShipAmbushAudioRunner : MonoBehaviour {
         private AudioSource _bulbSource;
         private AudioSource _violinSource;
+        private float _baseViolinVolume = 0.95f;
+        private float _targetVolume = 0.20f;
         private bool _fadingViolin;
         private float _fadeSpeed = 1f;
         private float _localDeadTimer;
+
+        public bool IsViolinPlaying => _violinSource != null && _violinSource.isPlaying;
 
         private void Awake() {
             var bulbObj = new GameObject("BulbShatterSource");
@@ -195,10 +213,36 @@ internal static class ShipAmbushAudio {
         public void PlayScaryViolin(AudioClip clip, float volume) {
             _violinSource.Stop();
             _violinSource.clip = clip;
-            _violinSource.volume = volume;
+            _baseViolinVolume = volume;
+            // Start at 20% volume when seen at the doorway, will increase as Giant approaches
+            _violinSource.volume = volume * 0.20f;
+            _targetVolume = _violinSource.volume;
             _fadingViolin = false;
             _localDeadTimer = 0f;
             _violinSource.Play();
+        }
+
+        public void UpdateProximity(float distance, bool isDead) {
+            if (_violinSource == null || !_violinSource.isPlaying || _fadingViolin) return;
+
+            if (isDead) {
+                // Keep at maximum intensity during the kill until the monster despawns
+                _targetVolume = _baseViolinVolume;
+            } else {
+                // Scaled from doorway (~8.5m) to melee distance (~1.2m)
+                float t = Mathf.InverseLerp(8.5f, 1.2f, distance);
+                float factor = Mathf.Lerp(0.20f, 1.0f, t);
+                _targetVolume = _baseViolinVolume * factor;
+            }
+
+            _violinSource.volume = Mathf.MoveTowards(_violinSource.volume, _targetVolume, Time.deltaTime * 2.5f);
+        }
+
+        public void CutOffViolin() {
+            if (_violinSource == null) return;
+            _violinSource.Stop();
+            _fadingViolin = false;
+            _violinSource.volume = 0f;
         }
 
         public void BeginFadeOut(float durationSeconds) {
@@ -212,15 +256,17 @@ internal static class ShipAmbushAudio {
 
             var round = StartOfRound.Instance;
             if (round == null || round.inShipPhase || round.shipIsLeaving) {
-                BeginFadeOut(0.5f);
-            } else {
-                var local = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
-                if (local != null && local.isPlayerDead) {
-                    _localDeadTimer += Time.deltaTime;
-                    // Keep the violin playing through the 2.5s strangulation/ragdoll death cam, then fade out smoothly.
-                    if (_localDeadTimer >= 2.6f && !_fadingViolin) {
-                        BeginFadeOut(1.2f);
-                    }
+                CutOffViolin();
+                return;
+            }
+
+            var local = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
+            if (local != null && local.isPlayerDead) {
+                _localDeadTimer += Time.deltaTime;
+                // Safety cutoff if for some reason the monster was never despawned after 20s
+                if (_localDeadTimer >= 20f) {
+                    CutOffViolin();
+                    return;
                 }
             }
 
