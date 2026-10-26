@@ -1,15 +1,10 @@
 # RollingGiant (Crew17)
 
-A customized Rolling Giant package for Lethal Company V81, based on the MIT-licensed upstream Rolling Giant mod and including native compatibility enhancements for **ControlCompany**.
+A customized Rolling Giant package for Lethal Company V81, based on the MIT-licensed upstream Rolling Giant mod.
 
-## Version 1.2.0
+## Version 1.1.5
 
-- Switches to official **ControlCompany (`ControlCompany-ControlCompany-1.3.3`)** as a Thunderstore dependency paired with a clean Harmony compatibility bridge (removing any embedded third-party code).
-- Fixes ControlCompany 1.3.3's Ghost Mode / Monster Mode top-right UI list rendering issue and startup input initialization timing on **Lethal Company V81**.
-- Adds full direct player control for the **Rolling Giant** (`F1` in Ghost Mode, both indoors and outdoors), including synced rolling audio, strangulation collision attack, manual stop-sound trigger (`LMB`), force-move while watched (`Hold RMB`), and toggling between manual and AI control (`F1`).
-- Automatically enables controlling monsters added by **other enemy mods** alongside all base-game monsters directly from the Ghost Mode spawn list (`F1`–`F12`).
-- Lets the Rolling Giant both **exit and re-enter** the facility through paired entrance doors (automatically when chasing a player who goes back inside, or manually by pressing `E` at a door while controlling the Giant).
-- Syncs Extended Mode (`0` + `8`) group credit boosts across multiplayer clients.
+- Bug fixes and general stability improvements for Lethal Company V81.
 
 ## Version 1.0.1
 
@@ -22,11 +17,10 @@ The guaranteed appearance needs interior AI nodes on the level. The host runs th
 
 ## Installation
 
-Install through Thunderstore Mod Manager or r2modman; BepInEx and ControlCompany will be installed automatically as dependencies. Disable or remove other Rolling Giant packages in the same profile to prevent duplicate plugins.
+Install through Thunderstore Mod Manager or r2modman; BepInEx will be installed automatically as a dependency. Disable or remove other Rolling Giant packages in the same profile to prevent duplicate plugins.
 
 ## Source and credits
 
 Reviewable C# source and build metadata: https://github.com/navi1896/rolling-giant-amigos
 
 Based on Rolling Giant by SoftDiamond and Andrew Burke (MIT License): https://github.com/TheSoftDiamond/lc-rolling-giant.
-Integrates via Harmony compatibility patches with ControlCompany: https://thunderstore.io/c/lethal-company/p/ControlCompany/ControlCompany/.

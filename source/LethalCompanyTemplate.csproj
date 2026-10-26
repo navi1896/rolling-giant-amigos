@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<AssemblyName>RollingGiant</AssemblyName>
 		<Product>RollingGiant</Product>
-		<Description>Rolling Giant for Lethal Company V81 with ControlCompany compatibility.</Description>
+		<Description>Rolling Giant for Lethal Company V81 with a built-in ghost mode / monster control system.</Description>
 		<LangVersion>Latest</LangVersion>
 	</PropertyGroup>
 
@@ -23,13 +23,6 @@
 		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
 		<PackageReference Include="UnityEngine.Modules" Version="2022.3.62" IncludeAssets="compile" PrivateAssets="all" />
 		<PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
-	</ItemGroup>
-
-	<!-- Optional/External Mod Compatibility Reference (never bundled) -->
-	<ItemGroup>
-		<Reference Include="ControlCompany" Publicize="true" Private="false">
-			<HintPath>..\libs\ControlCompany.dll</HintPath>
-		</Reference>
 	</ItemGroup>
 
 	<Target Name="NetcodePatch" AfterTargets="PostBuildEvent">

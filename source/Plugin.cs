@@ -62,27 +62,19 @@ public class Plugin : BaseUnityPlugin {
         LoadAssets();
         LoadNetWeaver();
         HarmonyInstance = Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly());
-        if (Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
-            try { PatchControlCompanyEarlyGuard(HarmonyInstance); } catch (Exception ex) { Logger.LogError(ex); }
+
+        // Built-in ghost mode / monster possession (Crew Control). Stays off if ControlCompany is installed.
+        try {
+            CrewControl.CrewControlSettings.Bind(base.Config);
+            if (CrewControl.CrewControlSettings.Enabled.Value
+                && !Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
+                CrewControl.CrewControlPatches.Apply(HarmonyInstance);
+            }
+        } catch (Exception ex) {
+            Logger.LogError(ex);
         }
         
         Logger.LogInfo($"Plugin {PluginGuid} is loaded!");
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void PatchControlCompanyEarlyGuard(Harmony harmony) {
-        Compatibility.ControlCompanyEarlyGuard.Patch(harmony);
-    }
-
-    public static void TryInitializeControlCompanyCompat() {
-        if (HarmonyInstance != null && Chainloader.PluginInfos.ContainsKey("ControlCompany.ControlCompany")) {
-            try { InitializeControlCompanyCompat(HarmonyInstance); } catch (Exception ex) { Log.LogError(ex); }
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void InitializeControlCompanyCompat(Harmony harmony) {
-        Compatibility.ControlCompanyCompat.Initialize(harmony);
     }
 
     private void LoadNetWeaver() {

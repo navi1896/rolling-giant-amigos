@@ -10,15 +10,10 @@ namespace RollingGiant.Patches;
 [HarmonyPatch]
 public class StartOfRoundPatches {
     [HarmonyPatch(typeof(StartOfRound), "Awake")]
-    [HarmonyPrefix]
-    [HarmonyPriority(Priority.First)]
-    private static void InitControlCompanyCompatPrefix() {
-        Plugin.TryInitializeControlCompanyCompat();
-    }
-
-    [HarmonyPatch(typeof(StartOfRound), "Awake")]
     [HarmonyPostfix]
     private static void AddCustomRagdoll(StartOfRound __instance) {
+        CrewControl.CrewControlManager.Create();
+
         var ragdolls = __instance.playerRagdolls;
         var playerRagdoll = Plugin.PlayerRagdoll;
         if (playerRagdoll && !ragdolls.Contains(playerRagdoll)) {
