@@ -8,27 +8,18 @@ A customized **Rolling Giant** package for **Lethal Company V81**, based on the 
 
 ## Version 2.1.2
 
-- Cooldown de transición en puertas de entrada y salida (2.5s) para dar tiempo al jugador de reaccionar tanto al salir como al entrar del complejo.
-- Pausa en puerta de la nave reducida de 6 a 4 segundos al ser detectado para un ataque más ágil y tenso.
-- Entrance transition delay (2.5s) to match player door transitions and prevent instant kills.
-- Ship ambush detection pause shortened to 4 seconds for tighter pacing.
+- Corrección en el cooldown al entrar y salir de las instalaciones (el monstruo tarda lo mismo que un jugador en cruzar).
+- Facility entrance and exit transition cooldown fix (the monster takes the same time as a player to cross).
 
 ## Version 2.1.1
 
-- Pausa al detectar al jugador en la puerta y violín tétrico con volumen aumentado que escala por proximidad hasta desaparecer.
-- Tense pause on detection and louder scary violin scaling by proximity until despawn.
-
-## Version 2.1.0
-
-- Sonido de foco reventado en el apagón de la nave, violín tétrico exclusivo para la víctima y velocidad al 60%.
-- Broken lightbulb blackout sound, eerie horror violin for the ship victim, and 60% stalk speed.
+- Ajustes de tensión y volumen en la nave.
+- Ship ambush timing and volume adjustments.
 
 ## Version 2.0.0
 
-- Corrección de bugs de navegación al entrar y salir de las instalaciones y mejoras generales de estabilidad en V81.
-- **Hay una sorpresa más esperando para los jugadores que se quedan en la nave...** 👀
-- Fixed facility entrance/exit navigation issues and general V81 stability improvements.
-- **Includes one more surprise waiting for players who stay in the ship...**
+- Corrección de bugs de navegación y estabilidad en V81.
+- Navigation bug fixes and V81 stability improvements.
 
 ## Características principales / Core Features
 
