@@ -6,6 +6,11 @@ Paquete personalizado de **Rolling Giant** para **Lethal Company V81**, basado e
 
 A customized **Rolling Giant** package for **Lethal Company V81**, based on the MIT-licensed upstream Rolling Giant mod.
 
+## Version 2.1.1
+
+- Pausa de 6 segundos al detectar al jugador en la puerta y violín tétrico con volumen aumentado que escala por proximidad hasta desaparecer.
+- 6-second tense pause on detection and louder scary violin scaling by proximity until despawn.
+
 ## Version 2.1.0
 
 - Sonido de foco reventado en el apagón de la nave, violín tétrico exclusivo para la víctima y velocidad al 60%.
