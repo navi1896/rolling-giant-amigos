@@ -13,6 +13,7 @@ public class StartOfRoundPatches {
     [HarmonyPostfix]
     private static void AddCustomRagdoll(StartOfRound __instance) {
         CrewControl.CrewControlManager.Create();
+        ShipAmbush.ShipAmbushManager.Create();
 
         var ragdolls = __instance.playerRagdolls;
         var playerRagdoll = Plugin.PlayerRagdoll;
@@ -116,5 +117,17 @@ public class StartOfRoundPatches {
                 audioSource.outputAudioMixerGroup = mixerGroup;
             }
         }
+    }
+
+    [HarmonyPatch(typeof(EnemyAI), "ChangeOwnershipOfEnemy")]
+    [HarmonyPrefix]
+    private static bool PreventOwnershipChangeDuringShipAmbush(EnemyAI __instance) {
+        return !(__instance is RollingGiantAI giant && giant.IsInShipAmbush);
+    }
+
+    [HarmonyPatch(typeof(EnemyAI), "ChangeEnemyOwnerServerRpc")]
+    [HarmonyPrefix]
+    private static bool PreventOwnerServerRpcDuringShipAmbush(EnemyAI __instance) {
+        return !(__instance is RollingGiantAI giant && giant.IsInShipAmbush);
     }
 }

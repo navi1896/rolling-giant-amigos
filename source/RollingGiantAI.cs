@@ -39,6 +39,23 @@ public class RollingGiantAI : EnemyAI {
    private bool _hasExitedFactory;
    private float _retryFactoryExitRequestAfter;
 
+   private enum ShipAmbushPhase {
+      None = 0,
+      WaitingToBeSeen = 1,
+      SeenPause = 2,
+      Attacking = 3
+   }
+
+   private ShipAmbushPhase _shipAmbushPhase = ShipAmbushPhase.None;
+   private float _shipAmbushStateTimer;
+   private float _shipAmbushNoInsidePlayerTimer;
+   private float _shipAmbushAttackSpeed;
+   private float _shipAmbushDoorwayYaw;
+   private Vector3 _shipAmbushDoorwayPos;
+   private Terminal? _cachedShipTerminal;
+
+   public bool IsInShipAmbush => _shipAmbushPhase != ShipAmbushPhase.None;
+
    public bool IsPlayerControlled { get; set; }
    public float PlayerControlledSpeed { get; set; }
    public bool ForceMoveWhileLookedAt { get; set; }
@@ -56,36 +73,40 @@ public class RollingGiantAI : EnemyAI {
       if (!IsServer || Time.time < _retryFactoryExitRequestAfter) return false;
 
       var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
+      EntranceTeleport? bestEntrance = null;
+      var bestDist = 5.5f;
       foreach (var currentSideEntrance in entrances) {
          if (currentSideEntrance == null) continue;
-         var doorPos = currentSideEntrance.entrancePoint != null ? currentSideEntrance.entrancePoint.position : currentSideEntrance.transform.position;
-         if (Vector3.Distance(transform.position, doorPos) > 5f && Vector3.Distance(transform.position, currentSideEntrance.transform.position) > 5f) continue;
+         if (currentSideEntrance.isEntranceToBuilding != isOutside) continue;
 
-         EntranceTeleport? targetEntrance = currentSideEntrance.exitScript;
-         if (targetEntrance == null)
-         {
-            foreach (var candidate in entrances)
-            {
-               if (candidate != null && candidate.entranceId == currentSideEntrance.entranceId && candidate.isEntranceToBuilding != currentSideEntrance.isEntranceToBuilding)
-               {
-                  targetEntrance = candidate;
-                  break;
-               }
-            }
+         var doorPos = currentSideEntrance.entrancePoint != null
+            ? currentSideEntrance.entrancePoint.position
+            : currentSideEntrance.transform.position;
+         var dist = Mathf.Min(
+            Vector3.Distance(transform.position, doorPos),
+            Vector3.Distance(transform.position, currentSideEntrance.transform.position));
+         if (dist < bestDist) {
+            bestDist = dist;
+            bestEntrance = currentSideEntrance;
          }
-         if (targetEntrance == null) continue;
-         var arrivalPosition = targetEntrance.entrancePoint != null ? targetEntrance.entrancePoint.position : targetEntrance.transform.position;
-         if (NavMesh.SamplePosition(arrivalPosition, out var navHit, 6f, NavMesh.AllAreas)) {
-            arrivalPosition = navHit.position;
-         }
-
-         _retryFactoryExitRequestAfter = Time.time + 2f;
-         FollowPlayerOutsideClientRpc(arrivalPosition, targetEntrance.transform.eulerAngles.y, 0);
-         destination = arrivalPosition;
-         return true;
       }
 
-      return false;
+      if (bestEntrance == null) return false;
+      if (!EntranceNavigationHelper.TryFindPairedEntrance(bestEntrance, entrances, out var targetEntrance) || targetEntrance == null) {
+         return false;
+      }
+
+      var arrivalPosition = EntranceNavigationHelper.ResolveSafeArrivalPosition(
+         targetEntrance,
+         agent,
+         allowOffMeshPlatformFallback: true,
+         out var arrivalYaw);
+      var nowOutside = targetEntrance.isEntranceToBuilding;
+
+      _retryFactoryExitRequestAfter = Time.time + 1.25f;
+      FollowPlayerOutsideClientRpc(arrivalPosition, arrivalYaw, -1, nowOutside);
+      destination = arrivalPosition;
+      return true;
    }
 
    private static void LogInfo(object message) {
@@ -116,6 +137,7 @@ public class RollingGiantAI : EnemyAI {
 
    private void Init(float scale) {
       agent = gameObject.GetComponentInChildren<NavMeshAgent>();
+      EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: scale < 1.2f);
       _rollingSFX = transform.Find("RollingSFX").GetComponent<AudioSource>();
       
       var mixer = SoundManager.Instance.diageticMixer.outputAudioMixerGroup;
@@ -184,9 +206,19 @@ public class RollingGiantAI : EnemyAI {
       // LogInfo($"{agent.speed}, {_velocity.Value}");
    
       if (IsPlayerControlled) {
+         if (_shipAmbushPhase != ShipAmbushPhase.None) {
+            _shipAmbushPhase = ShipAmbushPhase.None;
+         }
          _wasStopped = AmIBeingLookedAt(out _) && !ForceMoveWhileLookedAt;
          if (!_wasStopped) {
             _wasFeared = false;
+         }
+         return;
+      }
+
+      if (_shipAmbushPhase != ShipAmbushPhase.None) {
+         if (_searchForPlayers.inProgress) {
+            StopSearch(_searchForPlayers);
          }
          return;
       }
@@ -266,12 +298,35 @@ public class RollingGiantAI : EnemyAI {
       }
    
       if (IsHost || IsServer) {
-         _velocity.Value = IsPlayerControlled ? PlayerControlledSpeed : agent.velocity.magnitude;
+         if (_shipAmbushPhase != ShipAmbushPhase.None) {
+            _velocity.Value = _shipAmbushPhase == ShipAmbushPhase.Attacking ? _shipAmbushAttackSpeed : 0f;
+         } else {
+            if (!IsPlayerControlled && agent != null && !agent.enabled) {
+               EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: !_tooBig);
+               var filter = new NavMeshQueryFilter {
+                  agentTypeID = agent.agentTypeID,
+                  areaMask = agent.areaMask
+               };
+               if (NavMesh.SamplePosition(transform.position, out var reattachHit, 1.5f, filter)
+                   && Mathf.Abs(reattachHit.position.y - transform.position.y) < 0.7f) {
+                  transform.position = reattachHit.position;
+                  agent.enabled = true;
+                  if (!agent.isOnNavMesh) agent.Warp(reattachHit.position);
+               }
+            }
+            var agentSpeed = agent != null && agent.enabled ? agent.velocity.magnitude : 0f;
+            _velocity.Value = IsPlayerControlled ? PlayerControlledSpeed : agentSpeed;
+         }
       }
    
       base.Update();
    
       if (isEnemyDead) return;
+
+      if (_shipAmbushPhase != ShipAmbushPhase.None && !IsPlayerControlled) {
+         UpdateShipAmbush();
+         return;
+      }
    
       _lastSpeed = _velocity.Value;
       if (!IsPlayerControlled) {
@@ -314,9 +369,19 @@ public class RollingGiantAI : EnemyAI {
       }
    
       if (IsPlayerControlled) {
+         if (_shipAmbushPhase != ShipAmbushPhase.None) {
+            _shipAmbushPhase = ShipAmbushPhase.None;
+         }
          _wasStopped = AmIBeingLookedAt(out _) && !ForceMoveWhileLookedAt;
          if (!_wasStopped) {
             _wasFeared = false;
+         }
+         return;
+      }
+
+      if (_shipAmbushPhase != ShipAmbushPhase.None) {
+         if (_searchForPlayers.inProgress) {
+            StopSearch(_searchForPlayers);
          }
          return;
       }
@@ -613,7 +678,8 @@ public class RollingGiantAI : EnemyAI {
       if (!isOutside) {
          var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
          foreach (var insideEntrance in entrances) {
-            if (insideEntrance == null || !insideEntrance.isEntranceToBuilding) continue;
+            // In Lethal Company, isEntranceToBuilding == false is the INSIDE door, true is OUTSIDE.
+            if (insideEntrance == null || insideEntrance.isEntranceToBuilding) continue;
             if (!TryGetEntrancePair(insideEntrance.entranceId, out _, out var outsideEntrance)) continue;
 
             var insideDoorPosition = insideEntrance.entrancePoint != null
@@ -622,7 +688,8 @@ public class RollingGiantAI : EnemyAI {
             var outsideDoorPosition = outsideEntrance.entrancePoint != null
                ? outsideEntrance.entrancePoint.position
                : outsideEntrance.transform.position;
-            if (Vector3.Distance(transform.position, insideDoorPosition) > 16f) continue;
+            if (Vector3.Distance(transform.position, insideDoorPosition) > 16f &&
+                Vector3.Distance(transform.position, insideEntrance.transform.position) > 16f) continue;
             if (Vector3.Distance(player.transform.position, outsideDoorPosition) > 35f &&
                 Vector3.Distance(player.transform.position, outsideEntrance.transform.position) > 35f) continue;
 
@@ -634,7 +701,7 @@ public class RollingGiantAI : EnemyAI {
       } else {
          var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
          foreach (var insideEntrance in entrances) {
-            if (insideEntrance == null || !insideEntrance.isEntranceToBuilding) continue;
+            if (insideEntrance == null || insideEntrance.isEntranceToBuilding) continue;
             if (!TryGetEntrancePair(insideEntrance.entranceId, out _, out var outsideEntrance)) continue;
 
             var insideDoorPosition = insideEntrance.entrancePoint != null
@@ -675,29 +742,16 @@ public class RollingGiantAI : EnemyAI {
          : outsideEntrance.transform.position;
 
       if (!isOutside) {
-         if (Vector3.Distance(transform.position, insideDoorPosition) > 20f) return;
+         if (Vector3.Distance(transform.position, insideDoorPosition) > 20f &&
+             Vector3.Distance(transform.position, insideEntrance.transform.position) > 20f) return;
          if (Vector3.Distance(targetPlayer.transform.position, outsideDoorPosition) > 40f &&
              Vector3.Distance(targetPlayer.transform.position, outsideEntrance.transform.position) > 40f) return;
 
-         var arrivalPosition = outsideDoorPosition;
-         var outsideNodes = GameObject.FindGameObjectsWithTag("OutsideAINode");
-         GameObject? nearestOutsideNode = null;
-         var nearestOutsideDistance = float.MaxValue;
-         foreach (var node in outsideNodes) {
-            if (node == null) continue;
-            var distance = (node.transform.position - arrivalPosition).sqrMagnitude;
-            if (distance >= nearestOutsideDistance) continue;
-            nearestOutsideDistance = distance;
-            nearestOutsideNode = node;
-         }
-
-         var samplePosition = nearestOutsideNode != null && nearestOutsideDistance < 30f * 30f
-            ? nearestOutsideNode.transform.position
-            : arrivalPosition;
-         if (!NavMesh.SamplePosition(samplePosition, out var navHit, 6f, NavMesh.AllAreas)) {
-            Plugin.Log.LogWarning("Rolling Giant reached an exit, but no outdoor NavMesh point was found beside the paired entrance.");
-            return;
-         }
+         var arrivalPosition = EntranceNavigationHelper.ResolveSafeArrivalPosition(
+            outsideEntrance,
+            agent,
+            allowOffMeshPlatformFallback: false,
+            out var arrivalYaw);
 
          _hasExitedFactory = true;
          var networkObject = GetComponent<NetworkObject>();
@@ -705,32 +759,18 @@ public class RollingGiantAI : EnemyAI {
             networkObject.ChangeOwnership(NetworkManager.ServerClientId);
          }
 
-         FollowPlayerOutsideClientRpc(navHit.position, outsideEntrance.transform.eulerAngles.y, targetPlayerClientId);
+         FollowPlayerOutsideClientRpc(arrivalPosition, arrivalYaw, targetPlayerClientId, true);
       } else {
          if (Vector3.Distance(transform.position, outsideDoorPosition) > 20f &&
              Vector3.Distance(transform.position, outsideEntrance.transform.position) > 20f) return;
          if (Vector3.Distance(targetPlayer.transform.position, insideDoorPosition) > 40f &&
              Vector3.Distance(targetPlayer.transform.position, insideEntrance.transform.position) > 40f) return;
 
-         var arrivalPosition = insideDoorPosition;
-         var insideNodes = GameObject.FindGameObjectsWithTag("AINode");
-         GameObject? nearestInsideNode = null;
-         var nearestInsideDistance = float.MaxValue;
-         foreach (var node in insideNodes) {
-            if (node == null) continue;
-            var distance = (node.transform.position - arrivalPosition).sqrMagnitude;
-            if (distance >= nearestInsideDistance) continue;
-            nearestInsideDistance = distance;
-            nearestInsideNode = node;
-         }
-
-         var samplePosition = nearestInsideNode != null && nearestInsideDistance < 25f * 25f
-            ? nearestInsideNode.transform.position
-            : arrivalPosition;
-         if (!NavMesh.SamplePosition(samplePosition, out var navHit, 6f, NavMesh.AllAreas)) {
-            Plugin.Log.LogWarning("Rolling Giant reached an entrance outside, but no indoor NavMesh point was found inside.");
-            return;
-         }
+         var arrivalPosition = EntranceNavigationHelper.ResolveSafeArrivalPosition(
+            insideEntrance,
+            agent,
+            allowOffMeshPlatformFallback: false,
+            out var arrivalYaw);
 
          _hasExitedFactory = false;
          var networkObject = GetComponent<NetworkObject>();
@@ -738,48 +778,38 @@ public class RollingGiantAI : EnemyAI {
             networkObject.ChangeOwnership(NetworkManager.ServerClientId);
          }
 
-         FollowPlayerOutsideClientRpc(navHit.position, insideEntrance.transform.eulerAngles.y, targetPlayerClientId);
+         FollowPlayerOutsideClientRpc(arrivalPosition, arrivalYaw, targetPlayerClientId, false);
       }
    }
 
    [ClientRpc]
-   private void FollowPlayerOutsideClientRpc(Vector3 position, float yaw, int targetPlayerClientId) {
-      var outsideNodes = GameObject.FindGameObjectsWithTag("OutsideAINode");
-      var insideNodes = GameObject.FindGameObjectsWithTag("AINode");
-      var minOutDist = float.MaxValue;
-      var minInDist = float.MaxValue;
-      foreach (var n in outsideNodes) {
-         if (n != null) minOutDist = Mathf.Min(minOutDist, (n.transform.position - position).sqrMagnitude);
-      }
-      foreach (var n in insideNodes) {
-         if (n != null) minInDist = Mathf.Min(minInDist, (n.transform.position - position).sqrMagnitude);
-      }
-
-      var nowOutside = minOutDist <= minInDist;
+   private void FollowPlayerOutsideClientRpc(Vector3 position, float yaw, int targetPlayerClientId, bool nowOutside) {
       isOutside = nowOutside;
       _hasExitedFactory = nowOutside;
       _factoryExitRequestPending = false;
-      _retryFactoryExitRequestAfter = Time.time + 2f;
-      allAINodes = nowOutside ? outsideNodes : insideNodes;
+      _retryFactoryExitRequestAfter = Time.time + 1.5f;
+      SetEnemyOutside(nowOutside);
+      allAINodes = GameObject.FindGameObjectsWithTag(nowOutside ? "OutsideAINode" : "AINode");
 
-      var rotation = Quaternion.Euler(0f, yaw, 0f);
-      transform.SetPositionAndRotation(position, rotation);
-      if (agent == null) agent = GetComponentInChildren<NavMeshAgent>();
-      if (agent != null) {
-         if (agent.isOnNavMesh) agent.ResetPath();
-         agent.Warp(position);
-         if (agent.isOnNavMesh) agent.ResetPath();
+      var localPlayer = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
+      if (localPlayer != null && StartOfRound.Instance != null) {
+         EnableEnemyMesh(!nowOutside || !StartOfRound.Instance.hangarDoorsClosed || !localPlayer.isInHangarShipRoom);
       }
 
-      targetPlayer = FindPlayerByClientId(targetPlayerClientId);
+      if (agent == null) agent = GetComponentInChildren<NavMeshAgent>();
+      var rotation = Quaternion.Euler(0f, yaw, 0f);
+      EntranceNavigationHelper.PlaceAgentSafely(transform, agent, position, rotation, includeShip: !_tooBig || IsPlayerControlled);
+      serverPosition = transform.position;
+
+      targetPlayer = targetPlayerClientId >= 0 ? FindPlayerByClientId(targetPlayerClientId) : null;
       _lastChaseTarget = targetPlayer;
-      if (targetPlayer != null) {
+      if (targetPlayer != null && !IsPlayerControlled) {
          movingTowardsTargetPlayer = true;
          SwitchToBehaviourStateOnLocalClient(1);
          SetMovingTowardsTargetPlayer(targetPlayer);
       }
 
-      Plugin.Log.LogInfo("Rolling Giant followed its target outside through the paired facility exit.");
+      Plugin.Log.LogInfo($"Rolling Giant transitioned through facility entrance (outside={nowOutside}) at {transform.position}.");
    }
 
    private static bool TryGetEntrancePair(
@@ -790,14 +820,15 @@ public class RollingGiantAI : EnemyAI {
       outsideEntrance = null;
       var entrances = UnityEngine.Object.FindObjectsOfType<EntranceTeleport>();
       foreach (var candidate in entrances) {
-         if (candidate == null || !candidate.isEntranceToBuilding || candidate.entranceId != entranceId) continue;
+         // isEntranceToBuilding == false is the INSIDE door; true is the OUTSIDE door.
+         if (candidate == null || candidate.isEntranceToBuilding || candidate.entranceId != entranceId) continue;
          insideEntrance = candidate;
          outsideEntrance = candidate.exitScript;
-         if (outsideEntrance != null && !outsideEntrance.isEntranceToBuilding) return true;
+         if (outsideEntrance != null && outsideEntrance.isEntranceToBuilding) return true;
 
          outsideEntrance = null;
          foreach (var pairedCandidate in entrances) {
-            if (pairedCandidate != null && !pairedCandidate.isEntranceToBuilding && pairedCandidate.entranceId == entranceId) {
+            if (pairedCandidate != null && pairedCandidate.isEntranceToBuilding && pairedCandidate.entranceId == entranceId) {
                outsideEntrance = pairedCandidate;
                return true;
             }
@@ -822,6 +853,13 @@ public class RollingGiantAI : EnemyAI {
       if (daytimeEnemyLeaving) {
          return;
       }
+
+      if (_shipAmbushPhase == ShipAmbushPhase.WaitingToBeSeen || _shipAmbushPhase == ShipAmbushPhase.SeenPause) {
+         if (IsServer) {
+            var bumped = other.GetComponent<PlayerControllerB>();
+            StartShipAmbushAttack_ClientRpc(bumped != null ? (int)bumped.playerClientId : 0);
+         }
+      }
       
       base.OnCollideWithPlayer(other);
       if (_timeSinceHittingPlayer < 0.6f) {
@@ -831,14 +869,14 @@ public class RollingGiantAI : EnemyAI {
       var player = MeetsStandardPlayerCollisionConditions(other);
       if (!player) return;
 
-      if (_tooBig && player.isInHangarShipRoom) {
+      if (_tooBig && !IsInShipAmbush && player.isInHangarShipRoom) {
          return;
       }
 
       _timeSinceHittingPlayer = 0.2f;
       var index = StartOfRound.Instance.playerRagdolls.IndexOf(Plugin.PlayerRagdoll);
       player.DamagePlayer(90, causeOfDeath: CauseOfDeath.Strangulation, deathAnimation: index);
-      agent.speed = 0;
+      if (agent != null && agent.enabled) agent.speed = 0;
 
       GameNetworkManager.Instance.localPlayerController.JumpToFearLevel(1f);
    }
@@ -1151,6 +1189,9 @@ public class RollingGiantAI : EnemyAI {
       var config = CustomConfig.Instance;
       var sizeRange = isOutside ? new Vector2(config.GiantScaleOutsideMin, config.GiantScaleOutsideMax) : new Vector2(config.GiantScaleInsideMin, config.GiantScaleInsideMax);
       var scale = Mathf.Lerp(sizeRange.x, sizeRange.y, NextDouble());
+      if (IsInShipAmbush) {
+         scale = Mathf.Clamp(scale, 0.9f, 1.02f);
+      }
       AssignAgentData(scale);
       agent.transform.localScale = Vector3.one * scale;
       AssignInitData_ServerRpc(scale);
@@ -1171,7 +1212,7 @@ public class RollingGiantAI : EnemyAI {
    private void AssignAgentData(float scale) 
     {
       Init(scale);
-      if (scale >= 1.2f) {
+      if (scale >= 1.2f && !IsInShipAmbush) {
          var areas = agent.areaMask;
          // var exclude = 1 << NavMesh.GetAreaFromName("SmallSpace") | 1 << NavMesh.GetAreaFromName("MediumSpace") | 1 << NavMesh.GetAreaFromName("Climb");
          areas &= ~(1 << NavMesh.GetAreaFromName("SmallSpace"));
@@ -1180,7 +1221,415 @@ public class RollingGiantAI : EnemyAI {
          areas &= ~(1 << NavMesh.GetAreaFromName("PlayerShip"));
          agent.areaMask = areas;
          _tooBig = true;
+      } else {
+         _tooBig = false;
+         EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: true);
       }
+   }
+
+   internal void PrepareShipAmbushBeforeStart(Vector3 doorwayPos, float yaw) {
+      _shipAmbushPhase = ShipAmbushPhase.WaitingToBeSeen;
+      _shipAmbushDoorwayPos = doorwayPos;
+      _shipAmbushDoorwayYaw = yaw;
+      _shipAmbushStateTimer = 0f;
+      _shipAmbushAttackSpeed = 0f;
+      _tooBig = false;
+      transform.SetPositionAndRotation(doorwayPos, Quaternion.Euler(0f, yaw, 0f));
+   }
+
+   internal void BeginShipAmbushOnServer(Vector3 doorwayPos, float yaw, int targetClientId) {
+      if (!IsServer) return;
+
+      var clampedScale = Mathf.Clamp(transform.localScale.x > 0.1f ? transform.localScale.x : 1f, 0.9f, 1.02f);
+      AssignAgentData(clampedScale);
+      if (agent != null) {
+         agent.transform.localScale = Vector3.one * clampedScale;
+      }
+      AssignInitData_ClientRpc(clampedScale);
+
+      var netObj = GetComponent<NetworkObject>();
+      if (netObj != null && netObj.IsSpawned && netObj.OwnerClientId != NetworkManager.ServerClientId) {
+         netObj.ChangeOwnership(NetworkManager.ServerClientId);
+      }
+
+      BeginShipAmbush_ClientRpc(doorwayPos, yaw, targetClientId);
+   }
+
+   [ClientRpc]
+   private void BeginShipAmbush_ClientRpc(Vector3 doorwayPos, float yaw, int targetClientId) {
+      _shipAmbushPhase = ShipAmbushPhase.WaitingToBeSeen;
+      _shipAmbushDoorwayPos = doorwayPos;
+      _shipAmbushDoorwayYaw = yaw;
+      _shipAmbushStateTimer = 0f;
+      _shipAmbushNoInsidePlayerTimer = 0f;
+      _shipAmbushAttackSpeed = 0f;
+      _tooBig = false;
+      _wasStopped = false;
+      _wasFeared = false;
+
+      isOutside = true;
+      SetEnemyOutside(true);
+      EnableEnemyMesh(true);
+
+      moveTowardsDestination = false;
+      movingTowardsTargetPlayer = false;
+      if (_searchForPlayers.inProgress) {
+         StopSearch(_searchForPlayers);
+      }
+
+      if (agent == null) agent = GetComponentInChildren<NavMeshAgent>();
+      EntranceNavigationHelper.PlaceAgentSafely(transform, agent, doorwayPos, Quaternion.Euler(0f, yaw, 0f), includeShip: true);
+      if (agent != null && agent.enabled && agent.isOnNavMesh) {
+         agent.speed = 0f;
+         agent.velocity = Vector3.zero;
+         agent.ResetPath();
+      }
+      serverPosition = transform.position;
+
+      if (_rollingSFX != null) {
+         _rollingSFX.volume = 0f;
+      }
+
+      targetPlayer = FindPlayerByClientId(targetClientId);
+   }
+
+   [ClientRpc]
+   private void TriggerShipAmbushSeen_ClientRpc(int spottedByClientId) {
+      if (_shipAmbushPhase != ShipAmbushPhase.WaitingToBeSeen) return;
+
+      _shipAmbushPhase = ShipAmbushPhase.SeenPause;
+      _shipAmbushStateTimer = 0.45f;
+      _shipAmbushAttackSpeed = 0f;
+
+      var spottedBy = FindPlayerByClientId(spottedByClientId);
+      if (spottedBy != null) {
+         targetPlayer = spottedBy;
+      }
+
+      PlayLocalStopSound();
+
+      var localPlayer = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
+      if (localPlayer != null && !localPlayer.isPlayerDead && localPlayer.isInHangarShipRoom) {
+         localPlayer.JumpToFearLevel(0.9f);
+      }
+   }
+
+   [ClientRpc]
+   private void StartShipAmbushAttack_ClientRpc(int targetClientId) {
+      if (_shipAmbushPhase == ShipAmbushPhase.None) return;
+
+      _shipAmbushPhase = ShipAmbushPhase.Attacking;
+      _shipAmbushStateTimer = 0f;
+      _shipAmbushNoInsidePlayerTimer = 0f;
+      _wasStopped = false;
+      _wasFeared = false;
+      _tooBig = false;
+
+      var target = FindPlayerByClientId(targetClientId);
+      if (target != null) {
+         targetPlayer = target;
+      }
+
+      EnableEnemyMesh(true);
+      if (agent != null) {
+         EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: true);
+      }
+   }
+
+   [ClientRpc]
+   private void EndShipAmbush_ClientRpc() {
+      _shipAmbushPhase = ShipAmbushPhase.None;
+      _shipAmbushAttackSpeed = 0f;
+      _shipAmbushStateTimer = 0f;
+      _shipAmbushNoInsidePlayerTimer = 0f;
+      movingTowardsTargetPlayer = false;
+      SwitchToBehaviourStateOnLocalClient(0);
+   }
+
+   private void UpdateShipAmbush() {
+      var round = StartOfRound.Instance;
+      if (round == null) return;
+
+      _timeSinceHittingPlayer += Time.deltaTime;
+      isInsidePlayerShip = round.shipInnerRoomBounds != null
+         && round.shipInnerRoomBounds.bounds.Contains(transform.position + Vector3.up * 0.5f);
+
+      if (_shipAmbushPhase == ShipAmbushPhase.WaitingToBeSeen || _shipAmbushPhase == ShipAmbushPhase.SeenPause) {
+         _mainCollider.isTrigger = true;
+         if (_rollingSFX != null) {
+            _rollingSFX.volume = 0f;
+         }
+         moveTowardsDestination = false;
+         movingTowardsTargetPlayer = false;
+         if (agent != null && agent.enabled && agent.isOnNavMesh) {
+            agent.speed = 0f;
+            agent.velocity = Vector3.zero;
+            agent.ResetPath();
+         }
+
+         // Keep facing directly into the ship toward the target player while frozen in the doorway.
+         if (targetPlayer != null && !targetPlayer.isPlayerDead) {
+            var lookDir = targetPlayer.transform.position - transform.position;
+            lookDir.y = 0f;
+            if (lookDir.sqrMagnitude > 0.01f) {
+               transform.rotation = Quaternion.Slerp(
+                  transform.rotation,
+                  Quaternion.LookRotation(lookDir.normalized, Vector3.up),
+                  8f * Time.deltaTime);
+            }
+         } else {
+            transform.rotation = Quaternion.Euler(0f, _shipAmbushDoorwayYaw, 0f);
+         }
+
+         if (!IsServer) return;
+
+         if (round.inShipPhase || round.shipIsLeaving) {
+            DespawnAmbushGiant();
+            return;
+         }
+
+         // If someone shut the hydraulic ship door while the Giant was still outside unseen, release to normal outdoor AI.
+         if (round.hangarDoorsClosed && !isInsidePlayerShip) {
+            if (ShipAmbush.ShipAmbushSettings.DespawnAfterKill.Value && !IsSeenByAnyLivingPlayer(round)) {
+               DespawnAmbushGiant();
+            } else {
+               EndShipAmbush_ClientRpc();
+            }
+            return;
+         }
+
+         if (_shipAmbushPhase == ShipAmbushPhase.SeenPause) {
+            _shipAmbushStateTimer -= Time.deltaTime;
+            if (_shipAmbushStateTimer <= 0f) {
+               var attackTargetId = targetPlayer != null ? (int)targetPlayer.playerClientId : 0;
+               StartShipAmbushAttack_ClientRpc(attackTargetId);
+            }
+            return;
+         }
+
+         // WaitingToBeSeen: stay 100% motionless in the open doorway until a player turns around and sees the Giant!
+         if (_cachedShipTerminal == null) {
+            _cachedShipTerminal = UnityEngine.Object.FindObjectOfType<Terminal>();
+         }
+
+         var bodySightPoint = transform.position + Vector3.up * 1.6f;
+         var eyeSightPoint = eye != null ? eye.position : transform.position + Vector3.up * 2.4f;
+         var anyInsideAlive = false;
+
+         foreach (var player in round.allPlayerScripts) {
+            if (player == null || !player.IsSpawned || !player.isPlayerControlled || player.isPlayerDead) continue;
+            if (ShipAmbush.ShipAmbushManager.IsHostGhostBody(player)) continue;
+            if (player.isInsideFactory) continue;
+
+            if (player.isInHangarShipRoom) {
+               anyInsideAlive = true;
+            }
+
+            // Wait until the player actually exits the terminal screen or turns around to look!
+            if (ShipAmbush.ShipAmbushManager.IsPlayerUsingTerminal(player, _cachedShipTerminal)) {
+               continue;
+            }
+
+            var dist = Vector3.Distance(player.transform.position, transform.position);
+            if (dist < 2.0f
+                || (player.isInHangarShipRoom && (player.HasLineOfSightToPosition(bodySightPoint, 50f, 25)
+                                                  || player.HasLineOfSightToPosition(eyeSightPoint, 50f, 25)))
+                || (!player.isInHangarShipRoom && dist < 14f && player.HasLineOfSightToPosition(bodySightPoint, 45f, 16))) {
+               TriggerShipAmbushSeen_ClientRpc((int)player.playerClientId);
+               return;
+            }
+         }
+
+         if (!anyInsideAlive) {
+            _shipAmbushNoInsidePlayerTimer += Time.deltaTime;
+            if (_shipAmbushNoInsidePlayerTimer > 12f) {
+               if (ShipAmbush.ShipAmbushSettings.DespawnAfterKill.Value && !IsSeenByAnyLivingPlayer(round)) {
+                  DespawnAmbushGiant();
+               } else {
+                  EndShipAmbush_ClientRpc();
+               }
+            }
+         } else {
+            _shipAmbushNoInsidePlayerTimer = 0f;
+         }
+
+         return;
+      }
+
+      // Phase: Attacking (charges straight into the ship ignoring look-stop and kills the player inside!)
+      EnableEnemyMesh(true);
+      _mainCollider.isTrigger = true;
+      _wasStopped = false;
+      _wasFeared = false;
+      _shipAmbushStateTimer += Time.deltaTime;
+
+      var speed = _velocity.Value;
+      if (_rollingSFX != null) {
+         if (speed > 0.1f) {
+            _rollingSFX.volume = Mathf.Lerp(0f, Mathf.Clamp01(ROAMING_AUDIO_PERCENT * speed + 0.15f), speed / Mathf.Max(1f, _sharedAiSettings.moveSpeed));
+         } else {
+            _rollingSFX.volume = Mathf.Lerp(_rollingSFX.volume, 0f, Time.deltaTime * 4f);
+         }
+      }
+
+      // Local client proximity hit guarantee inside the ship (in case a stationary player at the terminal doesn't fire OnTriggerStay).
+      var local = GameNetworkManager.Instance != null ? GameNetworkManager.Instance.localPlayerController : null;
+      if (local != null
+          && !local.isPlayerDead
+          && local.IsSpawned
+          && local.isInHangarShipRoom
+          && !ShipAmbush.ShipAmbushManager.IsHostGhostBody(local)
+          && _timeSinceHittingPlayer >= 0.6f) {
+         if (!round.hangarDoorsClosed || isInsidePlayerShip) {
+            var horizDist = Vector2.Distance(
+               new Vector2(transform.position.x, transform.position.z),
+               new Vector2(local.transform.position.x, local.transform.position.z));
+            var vertDist = Mathf.Abs((transform.position.y + 1.0f) - (local.transform.position.y + 1.0f));
+            if (horizDist <= 1.2f && vertDist <= 2.2f) {
+               _timeSinceHittingPlayer = 0.2f;
+               var ragdollIndex = round.playerRagdolls.IndexOf(Plugin.PlayerRagdoll);
+               local.DamagePlayer(90, causeOfDeath: CauseOfDeath.Strangulation, deathAnimation: ragdollIndex);
+               local.JumpToFearLevel(1f);
+            }
+         }
+      }
+
+      if (!IsServer) return;
+
+      if (round.inShipPhase || round.shipIsLeaving) {
+         if (ShipAmbush.ShipAmbushSettings.DespawnAfterKill.Value) {
+            DespawnAmbushGiant();
+         } else {
+            EndShipAmbush_ClientRpc();
+         }
+         return;
+      }
+
+      // If the player managed to close the steel hydraulic door BEFORE the Giant crossed inside, respect the closed door!
+      if (round.hangarDoorsClosed && !isInsidePlayerShip) {
+         if (ShipAmbush.ShipAmbushSettings.DespawnAfterKill.Value && !IsSeenByAnyLivingPlayer(round)) {
+            DespawnAmbushGiant();
+         } else {
+            EndShipAmbush_ClientRpc();
+         }
+         return;
+      }
+
+      // Pick the closest living player inside the ship.
+      PlayerControllerB? bestShipVictim = null;
+      var bestVictimDist = float.MaxValue;
+      foreach (var p in round.allPlayerScripts) {
+         if (p == null || !p.IsSpawned || !p.isPlayerControlled || p.isPlayerDead) continue;
+         if (ShipAmbush.ShipAmbushManager.IsHostGhostBody(p)) continue;
+         var inShipArea = p.isInHangarShipRoom
+            || (round.shipBounds != null && round.shipBounds.bounds.Contains(p.transform.position));
+         if (!inShipArea) continue;
+
+         var d = Vector3.Distance(transform.position, p.transform.position);
+         if (d < bestVictimDist) {
+            bestVictimDist = d;
+            bestShipVictim = p;
+         }
+      }
+
+      if (bestShipVictim == null) {
+         _shipAmbushAttackSpeed = 0f;
+         if (agent != null && agent.enabled && agent.isOnNavMesh) {
+            agent.speed = 0f;
+            agent.velocity = Vector3.zero;
+            agent.ResetPath();
+         }
+         _shipAmbushNoInsidePlayerTimer += Time.deltaTime;
+         if (ShipAmbush.ShipAmbushSettings.DespawnAfterKill.Value) {
+            // Wait 2.5s after the kill so the victim sees the Giant on their death camera, then vanish once unseen by living players!
+            if (_shipAmbushNoInsidePlayerTimer >= 2.5f && !IsSeenByAnyLivingPlayer(round)) {
+               DespawnAmbushGiant();
+            } else if (_shipAmbushNoInsidePlayerTimer >= 20f) {
+               EndShipAmbush_ClientRpc();
+            }
+         } else if (_shipAmbushNoInsidePlayerTimer >= 1.5f) {
+            EndShipAmbush_ClientRpc();
+         }
+         return;
+      }
+
+      _shipAmbushNoInsidePlayerTimer = 0f;
+      targetPlayer = bestShipVictim;
+      var chaseSpeed = Mathf.Max(_sharedAiSettings.moveSpeed, 7.2f);
+      _shipAmbushAttackSpeed = chaseSpeed;
+
+      var usedNavAgent = false;
+      if (agent != null && agent.enabled && agent.isOnNavMesh) {
+         EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: true);
+         agent.isStopped = false;
+         agent.speed = chaseSpeed;
+         agent.acceleration = 120f;
+         agent.angularSpeed = 420f;
+         agent.SetDestination(bestShipVictim.transform.position);
+         usedNavAgent = _shipAmbushStateTimer < 0.25f || agent.velocity.magnitude > 0.65f;
+      }
+
+      // Threshold / furniture assist: if NavMeshAgent hesitates crossing the ship door lip, glide straight toward the victim on the ship floor!
+      if (!usedNavAgent) {
+         var toVictim = bestShipVictim.transform.position - transform.position;
+         var flatDir = new Vector3(toVictim.x, 0f, toVictim.z);
+         if (flatDir.sqrMagnitude > 0.01f) {
+            flatDir.Normalize();
+            var physMask = round.collidersAndRoomMaskAndDefault;
+            var step = flatDir * (chaseSpeed * Time.deltaTime);
+            var nextPos = transform.position + step;
+
+            if (Physics.Raycast(nextPos + Vector3.up * 1.6f, Vector3.down, out var deckHit, 3.2f, physMask, QueryTriggerInteraction.Ignore)
+                && Mathf.Abs(deckHit.point.y - bestShipVictim.transform.position.y) < 1.5f) {
+               nextPos.y = deckHit.point.y;
+            } else {
+               nextPos.y = Mathf.MoveTowards(transform.position.y, bestShipVictim.transform.position.y, 4f * Time.deltaTime);
+            }
+
+            var targetRot = Quaternion.LookRotation(flatDir, Vector3.up);
+            var smoothRot = Quaternion.Slerp(transform.rotation, targetRot, 10f * Time.deltaTime);
+
+            if (agent != null && agent.enabled) {
+               agent.enabled = false;
+            }
+            transform.SetPositionAndRotation(nextPos, smoothRot);
+            serverPosition = nextPos;
+         }
+      }
+   }
+
+   internal void DespawnAmbushGiant() {
+      if (!IsServer) return;
+      if (RoundManager.Instance != null && RoundManager.Instance.SpawnedEnemies != null) {
+         RoundManager.Instance.SpawnedEnemies.Remove(this);
+      }
+      if (NetworkObject != null && NetworkObject.IsSpawned) {
+         NetworkObject.Despawn(true);
+      }
+   }
+
+   private bool IsSeenByAnyLivingPlayer(StartOfRound round) {
+      if (round == null || round.allPlayerScripts == null) return false;
+
+      var bodyPos = transform.position + Vector3.up * 1.6f;
+      var headPos = eye != null ? eye.position : transform.position + Vector3.up * 2.4f;
+
+      foreach (var player in round.allPlayerScripts) {
+         if (player == null || !player.IsSpawned || !player.isPlayerControlled || player.isPlayerDead) continue;
+         if (ShipAmbush.ShipAmbushManager.IsHostGhostBody(player)) continue;
+         if (player.isInsideFactory) continue;
+
+         if (Vector3.Distance(player.transform.position, transform.position) < 4.0f) {
+            return true;
+         }
+
+         if (player.HasLineOfSightToPosition(bodyPos, 68f, 65)
+             || player.HasLineOfSightToPosition(headPos, 68f, 65)) {
+            return true;
+         }
+      }
+
+      return false;
    }
 
 }

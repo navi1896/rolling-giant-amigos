@@ -1,23 +1,27 @@
 # RollingGiant (Crew17)
 
-A customized Rolling Giant package for Lethal Company V81, based on the MIT-licensed upstream Rolling Giant mod.
+![RollingGiant Crew17](https://raw.githubusercontent.com/navi1896/rolling-giant-amigos/main/preview-2.0.png)
 
-## Version 1.1.5
+Paquete personalizado de **Rolling Giant** para **Lethal Company V81**, basado en el mod original bajo licencia MIT.
 
-- Bug fixes and general stability improvements for Lethal Company V81.
+A customized **Rolling Giant** package for **Lethal Company V81**, based on the MIT-licensed upstream Rolling Giant mod.
 
-## Version 1.0.1
+## Version 2.0.0
 
-- Guarantees one Rolling Giant inside the facility near the main entrance when the displayed in-game clock reaches 5:00 PM, once each active round.
-- Keeps configured random spawns enabled; an earlier random Giant does not cancel the scheduled 5:00 PM appearance.
-- If the interior Giant is already chasing a player who exits through a nearby paired entrance, the same networked Giant switches to the outdoor side and continues the chase. The transition uses the outdoor NavMesh near that exit.
-- Includes the grayscale custom face asset from the previous package version.
+- Corrección de bugs de navegación al entrar y salir de las instalaciones y mejoras generales de estabilidad en V81.
+- **Hay una sorpresa más esperando para los jugadores que se quedan en la nave...** 👀
+- Fixed facility entrance/exit navigation issues and general V81 stability improvements.
+- **Includes one more surprise waiting for players who stay in the ship...**
 
-The guaranteed appearance needs interior AI nodes on the level. The host runs the scheduled spawn. Every player should install and enable this package so the custom enemy and face are present on each client.
+## Características principales / Core Features
 
-## Installation
+- Garantiza la aparición de un Rolling Giant dentro de las instalaciones cerca de la entrada principal cuando el reloj marca las **5:00 PM**, una vez por ronda activa (sin cancelar apariciones aleatorias previas).
+- Si el Rolling Giant persigue a un jugador que cruza una puerta de entrada o salida conectada, continúa la persecución del otro lado usando el NavMesh correspondiente.
+- Incluye la textura personalizada en escala de grises para todos los jugadores que tengan el paquete instalado.
 
-Install through Thunderstore Mod Manager or r2modman; BepInEx will be installed automatically as a dependency. Disable or remove other Rolling Giant packages in the same profile to prevent duplicate plugins.
+## Instalación / Installation
+
+Instala mediante **Thunderstore Mod Manager** o **r2modman** (`BepInExPack` se instala automáticamente como dependencia). Todos los jugadores del lobby deben instalar y activar este paquete. Desactiva otras versiones de Rolling Giant en el mismo perfil para evitar duplicados.
 
 ## Source and credits
 

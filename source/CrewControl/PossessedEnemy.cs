@@ -90,6 +90,20 @@ internal sealed class PossessedEnemy {
         Enemy.moveTowardsDestination = false;
         Enemy.movingTowardsTargetPlayer = false;
 
+        if (agent != null && !agent.enabled) {
+            EntranceNavigationHelper.EnsureWalkableAgentSettings(agent, includeShip: true);
+            var filter = new NavMeshQueryFilter {
+                agentTypeID = agent.agentTypeID,
+                areaMask = agent.areaMask
+            };
+            if (NavMesh.SamplePosition(Enemy.transform.position, out var reattachHit, 1.1f, filter)
+                && Mathf.Abs(reattachHit.position.y - Enemy.transform.position.y) < 0.65f) {
+                Enemy.transform.position = reattachHit.position;
+                agent.enabled = true;
+                if (!agent.isOnNavMesh) agent.Warp(reattachHit.position);
+            }
+        }
+
         if (agent != null && agent.enabled && agent.isOnNavMesh) {
             agent.isStopped = false;
             if (wantsMove) {
@@ -106,11 +120,29 @@ internal sealed class PossessedEnemy {
                 _rollingGiant.PlayerControlledSpeed = stoppedByLook ? 0f : agent.velocity.magnitude;
             }
         } else if (wantsMove) {
-            // No usable NavMesh agent: plain transform movement.
-            Enemy.transform.position += direction.normalized * (speed * Time.deltaTime);
+            // Grounded physical movement when temporarily off-NavMesh (e.g. raised entrance platforms).
+            var moveDir = direction.normalized;
+            var physMask = StartOfRound.Instance != null
+                ? StartOfRound.Instance.collidersAndRoomMaskAndDefault
+                : Physics.DefaultRaycastLayers;
+            var step = moveDir * (speed * Time.deltaTime);
+            var currentPos = Enemy.transform.position;
+
+            if (!Physics.Raycast(currentPos + Vector3.up * 1.0f, moveDir, step.magnitude + 0.45f, physMask, QueryTriggerInteraction.Ignore)) {
+                var nextPos = currentPos + step;
+                if (Physics.Raycast(nextPos + Vector3.up * 1.4f, Vector3.down, out var groundHit, 3.6f, physMask, QueryTriggerInteraction.Ignore)
+                    && groundHit.point.y >= currentPos.y - 1.5f) {
+                    nextPos.y = groundHit.point.y;
+                }
+                Enemy.transform.position = nextPos;
+                Enemy.serverPosition = nextPos;
+            }
+
             Enemy.transform.rotation = Quaternion.Slerp(
-                Enemy.transform.rotation, Quaternion.LookRotation(direction), 8f * Time.deltaTime);
+                Enemy.transform.rotation, Quaternion.LookRotation(moveDir), 8f * Time.deltaTime);
             if (_rollingGiant != null) _rollingGiant.PlayerControlledSpeed = speed;
+        } else if (_rollingGiant != null) {
+            _rollingGiant.PlayerControlledSpeed = 0f;
         }
     }
 
@@ -127,8 +159,11 @@ internal sealed class PossessedEnemy {
         var best = 6f;
         foreach (var entrance in entrances) {
             if (entrance == null) continue;
+            if (entrance.isEntranceToBuilding != Enemy.isOutside) continue;
             var point = entrance.entrancePoint != null ? entrance.entrancePoint.position : entrance.transform.position;
-            var distance = Vector3.Distance(Enemy.transform.position, point);
+            var distance = Mathf.Min(
+                Vector3.Distance(Enemy.transform.position, point),
+                Vector3.Distance(Enemy.transform.position, entrance.transform.position));
             if (distance < best) {
                 best = distance;
                 nearest = entrance;
@@ -136,26 +171,20 @@ internal sealed class PossessedEnemy {
         }
         if (nearest == null) return false;
 
-        var target = nearest.exitScript;
-        if (target == null) {
-            foreach (var candidate in entrances) {
-                if (candidate != null && candidate.entranceId == nearest.entranceId
-                    && candidate.isEntranceToBuilding != nearest.isEntranceToBuilding) {
-                    target = candidate;
-                    break;
-                }
-            }
+        if (!EntranceNavigationHelper.TryFindPairedEntrance(nearest, entrances, out var target) || target == null) {
+            return false;
         }
-        if (target == null) return false;
 
-        var arrival = target.entrancePoint != null ? target.entrancePoint.position : target.transform.position;
-        if (NavMesh.SamplePosition(arrival, out var hit, 6f, NavMesh.AllAreas)) arrival = hit.position;
+        var arrival = EntranceNavigationHelper.ResolveSafeArrivalPosition(
+            target,
+            Enemy.agent,
+            allowOffMeshPlatformFallback: true,
+            out var arrivalYaw);
+        var rotation = Quaternion.Euler(0f, arrivalYaw, 0f);
 
-        var agent = Enemy.agent;
-        if (agent != null && agent.enabled) agent.Warp(arrival);
-        else Enemy.transform.position = arrival;
-        Enemy.serverPosition = arrival;
         Enemy.SetEnemyOutside(target.isEntranceToBuilding);
+        EntranceNavigationHelper.PlaceAgentSafely(Enemy.transform, Enemy.agent, arrival, rotation, includeShip: true);
+        Enemy.serverPosition = Enemy.transform.position;
         return true;
     }
 }

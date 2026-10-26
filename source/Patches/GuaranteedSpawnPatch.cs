@@ -56,7 +56,7 @@ public static class GuaranteedSpawnPatch {
 
             // Start near the main interior entrance so the Giant can reach the
             // paired exit and follow a player who leaves the facility.
-            var entrance = RoundManager.FindMainEntranceScript(getOutsideEntrance: true);
+            var entrance = RoundManager.FindMainEntranceScript(getOutsideEntrance: false);
             var anchor = entrance != null
                 ? (entrance.entrancePoint != null ? entrance.entrancePoint.position : entrance.transform.position)
                 : spawnNodes[0].transform.position;
@@ -106,4 +106,3 @@ public static class GuaranteedSpawnPatch {
         return (int)(timeOfDay.normalizedTimeOfDay * (60f * timeOfDay.numberOfHours)) + SixAmClockMinute;
     }
 }
-

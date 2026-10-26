@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using HarmonyLib;
 using RollingGiant.Settings;
 
@@ -188,4 +188,3 @@ public static class EnemyPatches {
         }
     }
 }
-

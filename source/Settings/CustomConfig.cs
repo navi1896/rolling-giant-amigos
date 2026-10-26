@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using BepInEx.Configuration;
 using Unity.Collections;
@@ -441,4 +441,3 @@ public class CustomConfig : SyncedInstance<CustomConfig> {
         }
     }
 }
-
